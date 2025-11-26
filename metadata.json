@@ -1,0 +1,7 @@
+{
+  "name": "AI Property Appraiser v.1126",
+  "description": "一款先進的房地產資訊查詢與估價工具，利用 AI 提供即時估價、房價趨勢分析，並讓您輕鬆收藏與比較心儀的房屋。",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
