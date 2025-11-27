@@ -1,16 +1,16 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import type { User, UserRole } from '../types';
 
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
-  login: (email: string, password: string) => boolean;
-  logout: () => void;
-  register: (details: { email: string; password: string; name: string; phone: string; }) => { success: boolean; messageKey: string };
-  addUser: (user: User) => { success: boolean; messageKey: string };
-  updateUser: (email: string, data: Partial<User>) => { success: boolean; messageKey: string };
-  deleteUser: (email: string) => { success: boolean; messageKey: string };
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  register: (details: { email: string; password: string; name: string; phone: string; }) => Promise<{ success: boolean; messageKey: string }>;
+  addUser: (user: User) => Promise<{ success: boolean; messageKey: string }>;
+  updateUser: (email: string, data: Partial<User>) => Promise<{ success: boolean; messageKey: string }>;
+  deleteUser: (email: string) => Promise<{ success: boolean; messageKey: string }>;
   isLoginModalOpen: boolean;
   setLoginModalOpen: (isOpen: boolean) => void;
   isAdminPanelOpen: boolean;
@@ -25,197 +25,349 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  // Load users and session from localStorage on initial load
-  useEffect(() => {
+  // --- Local Storage Helpers (Fallback Mode) ---
+  const getLocalUsers = (): User[] => {
     try {
-      const storedUsers = localStorage.getItem('app_users');
-      let parsedUsers: User[] = [];
+      const stored = localStorage.getItem('app_users');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  };
 
-      if (storedUsers) {
-        parsedUsers = JSON.parse(storedUsers);
-      } else {
-        // Seed initial admin user if no users exist
-        const adminUser: User = { email: 'admin@mazylab.com', password: 'admin123', role: '管理員', name: 'Admin', phone: '0912345678' };
-        parsedUsers = [adminUser];
-        localStorage.setItem('app_users', JSON.stringify(parsedUsers));
+  const saveLocalUsers = (newUsers: User[]) => {
+    localStorage.setItem('app_users', JSON.stringify(newUsers));
+    setUsers(newUsers);
+  };
+  // ---------------------------------------------
+
+  // Fetch all users (profiles)
+  const fetchUsers = async () => {
+    if (!isSupabaseConfigured) {
+        // Fallback to local storage
+        setUsers(getLocalUsers());
+        return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
+      
+      if (error) throw error;
+      
+      if (data) {
+        const mappedUsers: User[] = data.map(p => ({
+          email: p.email,
+          role: p.role as UserRole,
+          name: p.name,
+          phone: p.phone,
+          subscriptionExpiry: p.subscription_expiry
+        }));
+        setUsers(mappedUsers);
       }
+    } catch (error: any) {
+      // Improved error handling to show specific message
+      console.error("Error fetching users:", error.message || error);
+    }
+  };
 
-      // Check for subscription expiration
-      const now = new Date();
-      let hasUpdates = false;
-      const updatedUsers = parsedUsers.map(user => {
-          if (user.role === '付費用戶' && user.subscriptionExpiry) {
-              const expiryDate = new Date(user.subscriptionExpiry);
-              if (expiryDate < now) {
-                  // Subscription expired, downgrade to General User
-                  hasUpdates = true;
-                  return { ...user, role: '一般用戶' as UserRole, subscriptionExpiry: null };
-              }
+  // Initial Load: Check Session & Fetch Users
+  useEffect(() => {
+    const initSession = async () => {
+      if (!isSupabaseConfigured) {
+          // Fallback initialization: Check local storage for logged in user
+          const storedUser = localStorage.getItem('app_current_user');
+          if (storedUser) {
+              setCurrentUser(JSON.parse(storedUser));
           }
-          return user;
-      });
-
-      if (hasUpdates) {
-          setUsers(updatedUsers);
-          localStorage.setItem('app_users', JSON.stringify(updatedUsers));
-      } else {
-          setUsers(parsedUsers);
+          fetchUsers();
+          return;
       }
 
-      const storedSession = localStorage.getItem('app_session');
-      if (storedSession) {
-        const loggedInUser = JSON.parse(storedSession);
-        // We need to find the full user object from the (potentially updated) users list
-        const fullUser = updatedUsers.find((u: User) => u.email === loggedInUser.email);
-        if (fullUser) {
-          setCurrentUser(fullUser);
-        } else {
-            // If user in session no longer exists in DB, clear session
-            localStorage.removeItem('app_session');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // Fetch extended profile data
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profile) {
+          setCurrentUser({
+            email: profile.email,
+            role: profile.role as UserRole,
+            name: profile.name,
+            phone: profile.phone,
+            subscriptionExpiry: profile.subscription_expiry
+          });
         }
       }
-    } catch (error) {
-      console.error("Failed to parse from localStorage", error);
+      
+      fetchUsers();
+    };
+
+    initSession();
+
+    // Listen for auth changes (Only for Supabase)
+    if (isSupabaseConfigured) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          if (session?.user) {
+             const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+              
+            if (profile) {
+              setCurrentUser({
+                email: profile.email,
+                role: profile.role as UserRole,
+                name: profile.name,
+                phone: profile.phone,
+                subscriptionExpiry: profile.subscription_expiry
+              });
+            }
+            fetchUsers();
+          } else {
+            setCurrentUser(null);
+            setUsers([]);
+          }
+        });
+        return () => subscription.unsubscribe();
     }
   }, []);
 
-  const login = (email: string, password: string): boolean => {
-    // Refresh users from state to ensure latest data
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('app_session', JSON.stringify(user));
+  const login = async (email: string, password: string): Promise<boolean> => {
+    if (!isSupabaseConfigured) {
+        // Local Mock Login
+        const localUsers = getLocalUsers();
+        const user = localUsers.find(u => u.email === email && u.password === password);
+        
+        // Default Admin Fallback (if no users exist or specific hardcoded admin)
+        if (!user && localUsers.length === 0 && email === 'admin@mazylab.com' && password === 'admin123') {
+             const adminUser: User = { email, password, role: '管理員', name: 'Admin' };
+             // Save default admin to local storage so they exist next time
+             saveLocalUsers([adminUser]);
+             setCurrentUser(adminUser);
+             localStorage.setItem('app_current_user', JSON.stringify(adminUser));
+             setLoginModalOpen(false);
+             return true;
+        }
+
+        if (user) {
+            setCurrentUser(user);
+            localStorage.setItem('app_current_user', JSON.stringify(user));
+            setLoginModalOpen(false);
+            return true;
+        }
+        return false;
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
       setLoginModalOpen(false);
       return true;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
     }
-    return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (!isSupabaseConfigured) {
+        localStorage.removeItem('app_current_user');
+        setCurrentUser(null);
+        setAdminPanelOpen(false);
+        return;
+    }
+    await supabase.auth.signOut();
     setCurrentUser(null);
-    localStorage.removeItem('app_session');
+    setAdminPanelOpen(false);
   };
 
-  const register = (details: { email: string; password: string; name: string; phone: string; }): { success: boolean; messageKey: string } => {
-    if (users.some(u => u.email === details.email)) {
-      return { success: false, messageKey: 'registrationFailed' };
-    }
-    if (!details.name.trim()) {
-        return { success: false, messageKey: 'missingRequiredFields' };
-    }
-    if (!details.phone.trim()) {
+  const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string }> => {
+    if (!details.name.trim() || !details.phone.trim()) {
         return { success: false, messageKey: 'missingRequiredFields' };
     }
 
-    const newUser: User = { 
-        email: details.email, 
-        password: details.password, 
-        role: '一般用戶', // Default all new users to 'General Member'
-        name: details.name,
-        phone: details.phone
-    };
-    
-    setUsers(prevUsers => {
-        const updatedUsers = [...prevUsers, newUser];
-        localStorage.setItem('app_users', JSON.stringify(updatedUsers));
-        return updatedUsers;
-    });
-    
-    return { success: true, messageKey: 'registrationSuccess' };
-  };
+    if (!isSupabaseConfigured) {
+        // Local Mock Register
+        const localUsers = getLocalUsers();
+        if (localUsers.some(u => u.email === details.email)) {
+            return { success: false, messageKey: 'registrationFailed' };
+        }
+        
+        // If this is the first user, make them Admin
+        const isFirstUser = localUsers.length === 0;
+        const role: UserRole = isFirstUser ? '管理員' : '一般用戶';
+        
+        const newUser: User = { ...details, role };
+        saveLocalUsers([...localUsers, newUser]);
+        
+        return { success: true, messageKey: 'registrationSuccess' };
+    }
 
-  const addUser = (user: User): { success: boolean; messageKey: string } => {
-    if (users.some(u => u.email === user.email)) {
+    try {
+      // 1. Sign up in Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: details.email,
+        password: details.password,
+      });
+
+      if (signUpError) {
+        if (signUpError.message.includes('already registered')) {
+             return { success: false, messageKey: 'registrationFailed' }; 
+        }
+        throw signUpError;
+      }
+
+      if (data.user) {
+        // 2. Create Profile Record
+        const isFirstUser = users.length === 0;
+        const role: UserRole = isFirstUser ? '管理員' : '一般用戶';
+
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            { 
+              id: data.user.id,
+              email: details.email,
+              name: details.name,
+              phone: details.phone,
+              role: role
+            }
+          ]);
+
+        if (profileError) throw profileError;
+        
+        fetchUsers();
+        return { success: true, messageKey: 'registrationSuccess' };
+      }
+      return { success: false, messageKey: 'registrationFailed' };
+
+    } catch (error) {
+      console.error("Registration error:", error);
       return { success: false, messageKey: 'registrationFailed' };
     }
-    if (!user.password || user.password.length < 6) {
-        return { success: false, messageKey: 'passwordMinLength' };
-    }
-    if (!user.name || !user.phone) {
-      return { success: false, messageKey: 'missingRequiredFields' };
-    }
-    
-    setUsers(prevUsers => {
-        const updatedUsers = [...prevUsers, user];
-        localStorage.setItem('app_users', JSON.stringify(updatedUsers));
-        return updatedUsers;
-    });
-
-    return { success: true, messageKey: 'addUserSuccess' };
   };
 
-  const updateUser = (email: string, data: Partial<User>): { success: boolean; messageKey: string } => {
-    let updatedUsers = [...users];
-    const userIndex = updatedUsers.findIndex(u => u.email === email);
-    if (userIndex === -1) {
-        return { success: false, messageKey: 'userNotFound' };
-    }
-
-    // Prevent admin from removing their own admin rights if they are the only admin
-    const adminCount = users.filter(u => u.role === '管理員').length;
-    if (currentUser?.email === email && data.role && data.role !== '管理員' && adminCount <= 1) {
-      return { success: false, messageKey: 'cannotDeleteLastAdmin' };
+  const addUser = async (user: User): Promise<{ success: boolean; messageKey: string }> => {
+    if (!isSupabaseConfigured) {
+        // Local Add User
+        const localUsers = getLocalUsers();
+        if (localUsers.some(u => u.email === user.email)) {
+             return { success: false, messageKey: 'registrationFailed' }; 
+        }
+        saveLocalUsers([...localUsers, user]);
+        return { success: true, messageKey: 'addUserSuccess' };
     }
     
-    // If password is being updated, check its length
-    if (data.password && data.password.length > 0 && data.password.length < 6) {
-        return { success: false, messageKey: 'passwordMinLength' };
+    console.warn("Client-side 'addUser' with password is restricted in Supabase for security.");
+    return { success: false, messageKey: 'registrationFailed' }; 
+  };
+
+  const updateUser = async (email: string, data: Partial<User>): Promise<{ success: boolean; messageKey: string }> => {
+    if (!isSupabaseConfigured) {
+        // Local Update
+        const localUsers = getLocalUsers();
+        const idx = localUsers.findIndex(u => u.email === email);
+        if (idx === -1) return { success: false, messageKey: 'userNotFound' };
+        
+        const updatedUser = { ...localUsers[idx], ...data };
+        localUsers[idx] = updatedUser;
+        saveLocalUsers(localUsers);
+        
+        // Update current user if it matches
+        if (currentUser?.email === email) {
+            setCurrentUser(updatedUser);
+            localStorage.setItem('app_current_user', JSON.stringify(updatedUser));
+        }
+        return { success: true, messageKey: 'updateUserSuccess' };
     }
 
-    const updatedUser = { ...updatedUsers[userIndex], ...data };
-    // If password field is empty string, keep the old password
-    if (data.password === '') {
-        delete updatedUser.password;
+    try {
+      const targetUser = users.find(u => u.email === email);
+      if (!targetUser) return { success: false, messageKey: 'userNotFound' };
+
+      const { data: profileData, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (fetchError || !profileData) return { success: false, messageKey: 'userNotFound' };
+
+      const updates: any = {};
+      if (data.name) updates.name = data.name;
+      if (data.phone) updates.phone = data.phone;
+      if (data.role) updates.role = data.role;
+      if (data.subscriptionExpiry !== undefined) updates.subscription_expiry = data.subscriptionExpiry;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', profileData.id);
+
+      if (updateError) throw updateError;
+
+      fetchUsers();
+      if (currentUser?.email === email) {
+          const { data: newProfile } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
+          if (newProfile) {
+             setCurrentUser({
+                email: newProfile.email,
+                role: newProfile.role as UserRole,
+                name: newProfile.name,
+                phone: newProfile.phone,
+                subscriptionExpiry: newProfile.subscription_expiry
+             });
+          }
+      }
+
+      return { success: true, messageKey: 'updateUserSuccess' };
+    } catch (error) {
+      console.error("Update failed:", error);
+      return { success: false, messageKey: 'userNotFound' };
     }
-    
-    // Auto-handle subscription expiry when role changes manually
-    if (data.role === '一般用戶' && updatedUsers[userIndex].role === '付費用戶') {
-        updatedUser.subscriptionExpiry = null;
-    }
+  };
 
-    updatedUsers[userIndex] = updatedUser;
-
-    setUsers(updatedUsers);
-    localStorage.setItem('app_users', JSON.stringify(updatedUsers));
-
-    // If the currently logged-in user is the one being updated, refresh their session
+  const deleteUser = async (email: string): Promise<{ success: boolean; messageKey: string }> => {
     if (currentUser?.email === email) {
-        setCurrentUser(updatedUser);
-        localStorage.setItem('app_session', JSON.stringify(updatedUser));
-    }
-
-    return { success: true, messageKey: 'updateUserSuccess' };
-  };
-
-  const deleteUser = (email: string): { success: boolean; messageKey: string } => {
-    const targetEmail = email.trim();
-
-    // Prevent deleting the currently logged-in user
-    if (currentUser?.email === targetEmail) {
       return { success: false, messageKey: 'cannotDeleteSelf' };
     }
 
-    // Check if user exists in the current state (from closure)
-    const userToDelete = users.find(u => u.email === targetEmail);
-    if (!userToDelete) {
-        return { success: false, messageKey: 'userNotFound' };
+    if (!isSupabaseConfigured) {
+        // Local Delete
+        const localUsers = getLocalUsers();
+        const newUsers = localUsers.filter(u => u.email !== email);
+        if (newUsers.length === localUsers.length) return { success: false, messageKey: 'userNotFound' };
+        saveLocalUsers(newUsers);
+        return { success: true, messageKey: 'deleteUserSuccess' };
     }
 
-    // Prevent deleting the last admin
-    const adminCount = users.filter(u => u.role === '管理員').length;
-    if (userToDelete.role === '管理員' && adminCount <= 1) {
-      return { success: false, messageKey: 'cannotDeleteLastAdmin' };
-    }
+    try {
+       const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).single();
+       if (!profileData) return { success: false, messageKey: 'userNotFound' };
 
-    // Use functional update to ensure we are filtering from the absolute latest state
-    setUsers(prevUsers => {
-        const updatedUsers = prevUsers.filter(u => u.email !== targetEmail);
-        // Side effect: persist to local storage
-        localStorage.setItem('app_users', JSON.stringify(updatedUsers));
-        return updatedUsers;
-    });
-    
-    return { success: true, messageKey: 'deleteUserSuccess' };
+       const { error } = await supabase
+         .from('profiles')
+         .delete()
+         .eq('id', profileData.id);
+
+       if (error) throw error;
+
+       fetchUsers();
+       return { success: true, messageKey: 'deleteUserSuccess' };
+    } catch (error) {
+       console.error("Delete failed:", error);
+       return { success: false, messageKey: 'userNotFound' };
+    }
   };
 
   return (

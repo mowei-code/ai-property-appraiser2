@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect, useRef } from 'react';
 import type { User, UserRole } from '../types';
 import { AuthContext } from '../contexts/AuthContext';
 import { SettingsContext } from '../contexts/SettingsContext';
+import { isSupabaseConfigured } from '../supabaseClient'; // Import connection status
 import { XMarkIcon } from './icons/XMarkIcon';
 import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 import { parseMOICSV } from '../utils';
@@ -9,7 +10,11 @@ import { saveImportedTransactions, clearImportedTransactions } from '../services
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import { LinkIcon } from './icons/LinkIcon';
 import { EnvelopeIcon } from './icons/EnvelopeIcon';
-import { sendEmail } from '../services/emailService'; // Import 新的服務
+import { sendEmail } from '../services/emailService';
+import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
+import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
+import { CheckCircleIcon } from './icons/CheckCircleIcon'; // Added Icon
+import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; // Added Icon
 
 export const AdminPanel: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, setAdminPanelOpen, currentUser } = useContext(AuthContext);
@@ -17,6 +22,7 @@ export const AdminPanel: React.FC = () => {
   const [isEditing, setIsEditing] = useState<User | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,17 +78,17 @@ export const AdminPanel: React.FC = () => {
     setSuccess('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     let result;
     if (isAdding) {
-      result = addUser({ email, password, role, name, phone });
+      result = await addUser({ email, password, role, name, phone });
     } else if (isEditing) {
       const updatedData: Partial<User> = { role, name, phone };
       if (password) updatedData.password = password;
-      result = updateUser(isEditing.email, updatedData);
+      result = await updateUser(isEditing.email, updatedData);
     } else { return; }
 
     if (result.success) {
@@ -136,7 +142,7 @@ export const AdminPanel: React.FC = () => {
       else setError(`發送失敗: ${result.error}`);
   };
 
-  const handleSimulatePaymentForAdmin = () => {
+  const handleSimulatePaymentForAdmin = async () => {
       if (!currentUser) return;
       const now = new Date();
       const newExpiryDate = new Date();
@@ -144,22 +150,25 @@ export const AdminPanel: React.FC = () => {
       const updateData: Partial<User> = { subscriptionExpiry: newExpiryDate.toISOString() };
       if (currentUser.role !== '管理員') updateData.role = '付費用戶';
       
-      const result = updateUser(currentUser.email, updateData);
+      const result = await updateUser(currentUser.email, updateData);
       if (result.success) setSuccess("模擬成功！已延長30天訂閱。");
       else setError("模擬失敗: " + t(result.messageKey));
   };
 
   const initiateDelete = (userEmail: string) => { setUserToDelete(userEmail); setError(''); setSuccess(''); };
-  const confirmDelete = () => {
+  
+  const confirmDelete = async () => {
     if (!userToDelete) return;
-    const result = deleteUser(userToDelete);
+    const result = await deleteUser(userToDelete);
     if (result.success) { setSuccess(t(result.messageKey)); if (isEditing?.email === userToDelete) resetForm(); } 
     else { setError(t(result.messageKey)); }
     setUserToDelete(null);
   };
+  
   const handleEdit = (user: User) => { setIsAdding(false); setIsEditing(user); setSuccess(''); setError(''); };
   const handleAddNew = () => { resetForm(); setIsAdding(true); };
-  const handleExtendSubscription = (days: number) => {
+  
+  const handleExtendSubscription = async (days: number) => {
       if (!isEditing) return;
       const now = new Date();
       let newExpiryDate = now;
@@ -168,7 +177,7 @@ export const AdminPanel: React.FC = () => {
           if (currentExpiry > now) newExpiryDate = currentExpiry;
       }
       newExpiryDate.setDate(newExpiryDate.getDate() + days);
-      const result = updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: newExpiryDate.toISOString() });
+      const result = await updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: newExpiryDate.toISOString() });
       if (result.success) {
           setSuccess(t('subscriptionExtended', { date: newExpiryDate.toLocaleDateString() }));
           setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: newExpiryDate.toISOString() });
@@ -212,6 +221,58 @@ export const AdminPanel: React.FC = () => {
       if (window.confirm(t('confirmClearData'))) { clearImportedTransactions(); setImportStatus(t('dataCleared')); }
   };
 
+  // Full System Backup (Export)
+  const handleSystemBackup = () => {
+      const backupData = {
+          users: localStorage.getItem('app_users'),
+          settings: localStorage.getItem('app_system_settings'),
+          realEstateData: localStorage.getItem('imported_real_estate_data'),
+          timestamp: new Date().toISOString(),
+          version: '1.0'
+      };
+      
+      const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `aiproperty_backup_${dateStr}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setImportStatus('系統備份已下載。請妥善保存此檔案，在新裝置上使用「還原系統」功能即可恢復所有設定。');
+  };
+
+  // Full System Restore (Import)
+  const handleSystemRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      if (!window.confirm('警告：還原操作將會覆蓋目前裝置上的所有設定與會員資料。確定要繼續嗎？')) {
+          if (restoreInputRef.current) restoreInputRef.current.value = '';
+          return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const content = e.target?.result as string;
+              const backup = JSON.parse(content);
+              
+              if (backup.users) localStorage.setItem('app_users', backup.users);
+              if (backup.settings) localStorage.setItem('app_system_settings', backup.settings);
+              if (backup.realEstateData) localStorage.setItem('imported_real_estate_data', backup.realEstateData);
+              
+              alert('系統還原成功！頁面將重新整理以套用設定。');
+              window.location.reload();
+          } catch (err) {
+              console.error("Restore failed", err);
+              alert('還原失敗：檔案格式錯誤或損毀。');
+          }
+      };
+      reader.readAsText(file);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-orange-400 dark:border-orange-500">
@@ -224,6 +285,20 @@ export const AdminPanel: React.FC = () => {
             <div className="space-y-8">
                 <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
                     <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
+                    
+                    {/* Supabase Status Indicator */}
+                    <div className={`mb-4 p-3 rounded-lg border ${isSupabaseConfigured ? 'bg-green-100 border-green-200 text-green-800' : 'bg-yellow-100 border-yellow-200 text-yellow-800'}`}>
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                            {isSupabaseConfigured ? <CheckCircleIcon className="h-5 w-5 flex-shrink-0" /> : <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />}
+                            <span>{isSupabaseConfigured ? '雲端資料庫 (Connected)' : '本地模式 (Local Mode)'}</span>
+                        </div>
+                        {!isSupabaseConfigured && (
+                            <p className="text-[10px] mt-1 ml-7 leading-tight opacity-80">
+                                未偵測到 Supabase 設定。請在專案根目錄建立 <code>.env</code> 檔案並填入 URL 與 Key。目前使用瀏覽器暫存。
+                            </p>
+                        )}
+                    </div>
+
                     <div className="space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1">
@@ -247,11 +322,25 @@ export const AdminPanel: React.FC = () => {
                 </div>
                 
                 <div className="bg-blue-50 p-4 rounded-xl">
-                    <h3 className="font-bold text-blue-800 mb-2">資料管理</h3>
+                    <h3 className="font-bold text-blue-800 mb-2">資料與備份管理</h3>
+                    
+                    <div className="mb-4 pb-4 border-b border-blue-200">
+                        <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded py-2 mb-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <ArrowDownTrayIcon className="h-4 w-4" /> 備份系統資料
+                        </button>
+                        <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
+                        <button onClick={()=>restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <ArrowUpTrayIcon className="h-4 w-4" /> 還原系統資料
+                        </button>
+                        <p className="text-[10px] text-blue-600 mt-1 leading-tight">
+                            * 換裝置前請先備份，至新裝置還原即可同步設定與會員資料。
+                        </p>
+                    </div>
+
                     <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
-                    <button onClick={()=>fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">匯入 CSV</button>
-                    <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">清除資料</button>
-                    {importStatus && <p className="text-xs text-blue-700 text-center mt-2">{importStatus}</p>}
+                    <button onClick={()=>fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">匯入 實價登錄 CSV</button>
+                    <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">清除實價登錄資料</button>
+                    {importStatus && <p className="text-xs text-blue-700 text-center mt-2 font-bold">{importStatus}</p>}
                 </div>
             </div>
           </div>
