@@ -18,6 +18,11 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    chunkSizeWarningLimit: 1000, // Increase warning limit to 1000kb to reduce build noise
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
   define: {
     // Inject the build date as a string constant.
     // This ensures the "Release Date" in the About page is always the date of the last build.
