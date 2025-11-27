@@ -56,8 +56,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       if (data) {
-        // Fix: Handle potential null values from DB by defaulting to empty string or undefined
-        const mappedUsers: User[] = data.map(p => ({
+        // Explicitly cast data to any[] to avoid TypeScript inference issues with Supabase client
+        const profiles = data as any[];
+        const mappedUsers: User[] = profiles.map(p => ({
           email: p.email || '',
           role: (p.role || '一般用戶') as UserRole,
           name: p.name || undefined, 
@@ -89,13 +90,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (session?.user) {
         // Fetch extended profile data
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
           
-        if (profile) {
+        if (profileData) {
+          const profile = profileData as any;
           setCurrentUser({
             email: profile.email || '',
             role: (profile.role || '一般用戶') as UserRole,
@@ -115,13 +117,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (isSupabaseConfigured) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
           if (session?.user) {
-             const { data: profile } = await supabase
+             const { data: profileData } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', session.user.id)
               .single();
               
-            if (profile) {
+            if (profileData) {
+              const profile = profileData as any;
               setCurrentUser({
                 email: profile.email || '',
                 role: (profile.role || '一般用戶') as UserRole,
@@ -320,8 +323,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       fetchUsers();
       if (currentUser?.email === email) {
-          const { data: newProfile } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
-          if (newProfile) {
+          const { data: newProfileData } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
+          if (newProfileData) {
+             const newProfile = newProfileData as any;
              setCurrentUser({
                 email: newProfile.email || '',
                 role: (newProfile.role || '一般用戶') as UserRole,
