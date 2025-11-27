@@ -11,8 +11,6 @@ import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import { LinkIcon } from './icons/LinkIcon';
 import { EnvelopeIcon } from './icons/EnvelopeIcon';
 import { sendEmail } from '../services/emailService';
-import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
-import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon'; // Added Icon
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; // Added Icon
 
@@ -326,11 +324,9 @@ export const AdminPanel: React.FC = () => {
                     
                     <div className="mb-4 pb-4 border-b border-blue-200">
                         <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded py-2 mb-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <ArrowDownTrayIcon className="h-4 w-4" /> 備份系統資料
                         </button>
                         <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
                         <button onClick={()=>restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <ArrowUpTrayIcon className="h-4 w-4" /> 還原系統資料
                         </button>
                         <p className="text-[10px] text-blue-600 mt-1 leading-tight">
                             * 換裝置前請先備份，至新裝置還原即可同步設定與會員資料。
