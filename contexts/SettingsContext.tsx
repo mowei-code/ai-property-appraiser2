@@ -1,6 +1,14 @@
+
 import React, { createContext, useState, useEffect, ReactNode, useContext, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import type { Language } from '../types';
+
+// Directly import translation files to ensure they are bundled by Vite
+// This fixes the issue where fetch fails on Vercel if files aren't in the public folder
+import zhTW from '../locales/zh-TW.json';
+import zhCN from '../locales/zh-CN.json';
+import en from '../locales/en.json';
+import ja from '../locales/ja.json';
 
 export interface Settings {
   apiKey: string;
@@ -36,11 +44,12 @@ const defaultSettings: Settings = {
   autoUpdateCacheOnLogin: true,
 };
 
+// Initialize with imported data
 const defaultTranslations: Record<Language, any> = {
-    'zh-TW': {},
-    'zh-CN': {},
-    'en': {},
-    'ja': {},
+    'zh-TW': zhTW,
+    'zh-CN': zhCN,
+    'en': en,
+    'ja': ja,
 };
 
 const SYSTEM_KEYS: (keyof Settings)[] = [
@@ -85,35 +94,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   });
 
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
+  // Use state initialized with imports
   const [translations, setTranslations] = useState(defaultTranslations);
 
-  useEffect(() => {
-    const fetchTranslations = async () => {
-        try {
-            const [zhTWRes, zhCNRes, enRes, jaRes] = await Promise.all([
-                fetch('./locales/zh-TW.json'),
-                fetch('./locales/zh-CN.json'),
-                fetch('./locales/en.json'),
-                fetch('./locales/ja.json'),
-            ]);
-            
-            if (!zhTWRes.ok || !zhCNRes.ok || !enRes.ok || !jaRes.ok) {
-                throw new Error('One or more translation files failed to load.');
-            }
-
-            const loadedTranslations = {
-                'zh-TW': await zhTWRes.json(),
-                'zh-CN': await zhCNRes.json(),
-                'en': await enRes.json(),
-                'ja': await jaRes.json(),
-            };
-            setTranslations(loadedTranslations);
-        } catch (error) {
-            console.error("Failed to fetch translation files:", error);
-        }
-    };
-    fetchTranslations();
-  }, []);
+  // Removed useEffect fetch block because we are importing JSONs directly.
+  // This ensures languages are always available immediately after build.
 
   const getStorageKey = useCallback(() => {
     if (!currentUser) return null;
@@ -128,7 +113,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         const storedSettings = localStorage.getItem(storageKey);
         if (storedSettings) {
           const parsedSettings = JSON.parse(storedSettings);
-          if (!translations.hasOwnProperty(parsedSettings.language)) {
+          // Check if parsed language is valid, otherwise fallback
+          if (!defaultTranslations.hasOwnProperty(parsedSettings.language)) {
               parsedSettings.language = defaultSettings.language;
           }
           SYSTEM_KEYS.forEach(key => { delete parsedSettings[key]; });
@@ -154,7 +140,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         font: prev.font,
       }));
     }
-  }, [currentUser, getStorageKey, translations]);
+  }, [currentUser, getStorageKey]);
   
   useEffect(() => {
     const root = window.document.documentElement;
