@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect, ErrorInfo, ReactNode, Component } from 'react';
+import React, { Component, useState, useContext, useEffect, ErrorInfo, ReactNode } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
@@ -23,10 +23,10 @@ interface ErrorBoundaryState {
 }
 
 class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -202,7 +202,7 @@ export const SettingsModal: React.FC = () => {
             
             newExpiryDate.setDate(newExpiryDate.getDate() + daysToAdd);
 
-            const result = updateUser(currentUser.email, { 
+            const result = await updateUser(currentUser.email, { 
                 role: '付費用戶',
                 subscriptionExpiry: newExpiryDate.toISOString()
             });

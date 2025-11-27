@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import type { User, UserRole } from '../types';
@@ -55,12 +56,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       if (data) {
+        // Fix: Handle potential null values from DB by defaulting to empty string or undefined
         const mappedUsers: User[] = data.map(p => ({
-          email: p.email,
-          role: p.role as UserRole,
-          name: p.name,
-          phone: p.phone,
-          subscriptionExpiry: p.subscription_expiry
+          email: p.email || '',
+          role: (p.role || '一般用戶') as UserRole,
+          name: p.name || undefined, 
+          phone: p.phone || undefined,
+          subscriptionExpiry: p.subscription_expiry || undefined
         }));
         setUsers(mappedUsers);
       }
@@ -95,11 +97,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
         if (profile) {
           setCurrentUser({
-            email: profile.email,
-            role: profile.role as UserRole,
-            name: profile.name,
-            phone: profile.phone,
-            subscriptionExpiry: profile.subscription_expiry
+            email: profile.email || '',
+            role: (profile.role || '一般用戶') as UserRole,
+            name: profile.name || undefined,
+            phone: profile.phone || undefined,
+            subscriptionExpiry: profile.subscription_expiry || undefined
           });
         }
       }
@@ -121,11 +123,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               
             if (profile) {
               setCurrentUser({
-                email: profile.email,
-                role: profile.role as UserRole,
-                name: profile.name,
-                phone: profile.phone,
-                subscriptionExpiry: profile.subscription_expiry
+                email: profile.email || '',
+                role: (profile.role || '一般用戶') as UserRole,
+                name: profile.name || undefined,
+                phone: profile.phone || undefined,
+                subscriptionExpiry: profile.subscription_expiry || undefined
               });
             }
             fetchUsers();
@@ -321,11 +323,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { data: newProfile } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
           if (newProfile) {
              setCurrentUser({
-                email: newProfile.email,
-                role: newProfile.role as UserRole,
-                name: newProfile.name,
-                phone: newProfile.phone,
-                subscriptionExpiry: newProfile.subscription_expiry
+                email: newProfile.email || '',
+                role: (newProfile.role || '一般用戶') as UserRole,
+                name: newProfile.name || undefined,
+                phone: newProfile.phone || undefined,
+                subscriptionExpiry: newProfile.subscription_expiry || undefined
              });
           }
       }

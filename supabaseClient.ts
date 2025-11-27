@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // 這些環境變數需要在您的專案根目錄下的 .env 檔案中設定 (本地開發)
@@ -19,7 +20,8 @@ if (!isSupabaseConfigured) {
   console.info('ℹ️ 未偵測到 Supabase 設定 (URL/Key)。應用程式將以「本地儲存模式」運行，資料將僅儲存於瀏覽器中。');
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseAnonKey || 'placeholder'
-);
+// 若 URL 為空，使用 placeholder 防止 build time crash
+const validUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const validKey = supabaseAnonKey || 'placeholder';
+
+export const supabase = createClient(validUrl, validKey);
