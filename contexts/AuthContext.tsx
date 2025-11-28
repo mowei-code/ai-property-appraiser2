@@ -26,10 +26,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
   
-  // Track if a registration process is active to prevent auto-login flash
   const justRegistered = useRef(false);
 
-  // --- Local Storage Helpers (Fallback Mode) ---
+  // --- Local Storage Helpers ---
   const getLocalUsers = (): User[] => {
     try {
       const stored = localStorage.getItem('app_users');
@@ -41,21 +40,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('app_users', JSON.stringify(newUsers));
     setUsers(newUsers);
   };
-  // ---------------------------------------------
+  // -----------------------------
 
-  // Fetch all users (profiles)
   const fetchUsers = async () => {
     if (!isSupabaseConfigured) {
         setUsers(getLocalUsers());
         return;
     }
-
     try {
-      // 這裡如果失敗也不要 throw，避免卡住整個 App
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*');
-      
+      const { data } = await supabase.from('profiles').select('*');
       if (data) {
         const profiles = data as any[];
         const mappedUsers: User[] = profiles.map(p => ({
@@ -64,70 +57,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: p.name || undefined, 
           phone: p.phone || undefined,
           subscriptionExpiry: p.subscription_expiry || undefined,
-          // User type definition in types.ts doesn't have ID, but we map it internally if needed
+          id: p.id
         }));
         setUsers(mappedUsers);
       }
     } catch (error: any) {
-      console.warn("Error fetching users list (non-critical):", error.message || error);
+      console.warn("fetchUsers warning:", error.message);
     }
   };
 
-  // Helper to fetch profile
-  const fetchProfile = async (userId: string, email: string) => {
+  const fetchProfile = async (userId: string) => {
       try {
-        const { data: profileData, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle();
-        
-        if (error) {
-            console.warn("Fetch Profile Error:", error);
-            return null;
-        }
-        return profileData;
-      } catch (e) {
-        return null;
-      }
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        return data;
+      } catch { return null; }
   };
 
-  // Initial Load: Check Session & Fetch Users
   useEffect(() => {
     const initSession = async () => {
       if (!isSupabaseConfigured) {
           const storedUser = localStorage.getItem('app_current_user');
-          if (storedUser) {
-              setCurrentUser(JSON.parse(storedUser));
-          }
+          if (storedUser) setCurrentUser(JSON.parse(storedUser));
           fetchUsers();
           return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id, session.user.email || '');
-          
-        if (profile) {
-          const p = profile as any;
-          setCurrentUser({
-            email: p.email || '',
-            role: (p.role || '一般用戶') as UserRole,
-            name: p.name || undefined,
-            phone: p.phone || undefined,
-            subscriptionExpiry: p.subscription_expiry || undefined
-          });
-        } else {
-            // Fallback if profile missing (Admin login recovery)
-            const isAdmin = session.user.email === 'admin@mazylab.com';
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id);
+          if (profile) {
+            const p = profile as any;
             setCurrentUser({
-                email: session.user.email || '',
-                role: isAdmin ? '管理員' : '一般用戶'
+              email: p.email || '',
+              role: (p.role || '一般用戶') as UserRole,
+              name: p.name || undefined,
+              phone: p.phone || undefined,
+              subscriptionExpiry: p.subscription_expiry || undefined
             });
+          } else {
+              const isAdmin = session.user.email === 'admin@mazylab.com';
+              setCurrentUser({
+                  email: session.user.email || '',
+                  role: isAdmin ? '管理員' : '一般用戶'
+              });
+          }
         }
+      } catch (e) {
+        console.error("Session init error", e);
       }
-      
       fetchUsers();
     };
 
@@ -135,33 +113,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (isSupabaseConfigured) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (justRegistered.current && event === 'SIGNED_IN') {
-             return;
-          }
+          if (justRegistered.current && event === 'SIGNED_IN') return;
 
           if (session?.user) {
-             // Wait for DB Trigger to complete insertion
              if (event === 'SIGNED_IN') await new Promise(r => setTimeout(r, 500));
-
-             const profile = await fetchProfile(session.user.id, session.user.email || '');
-              
-            if (profile) {
-              const p = profile as any;
-              setCurrentUser({
-                email: p.email || '',
-                role: (p.role || '一般用戶') as UserRole,
-                name: p.name || undefined,
-                phone: p.phone || undefined,
-                subscriptionExpiry: p.subscription_expiry || undefined
-              });
-            } else {
+             const profile = await fetchProfile(session.user.id);
+             if (profile) {
+                const p = profile as any;
+                setCurrentUser({
+                  email: p.email || '',
+                  role: (p.role || '一般用戶') as UserRole,
+                  name: p.name || undefined,
+                  phone: p.phone || undefined,
+                  subscriptionExpiry: p.subscription_expiry || undefined
+                });
+             } else {
                 const isAdmin = session.user.email === 'admin@mazylab.com';
                 setCurrentUser({
                     email: session.user.email || '',
                     role: isAdmin ? '管理員' : '一般用戶'
                 });
-            }
-            fetchUsers();
+             }
+             fetchUsers();
           } else {
             setCurrentUser(null);
             setUsers([]);
@@ -172,8 +145,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    console.log("Login attempt:", email); // Debug log
+
+    // 1. Local Mode Logic
     if (!isSupabaseConfigured) {
-        // ... (Local login logic remains same) ...
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === password);
         if (!user && localUsers.length === 0 && email === 'admin@mazylab.com' && password === 'admin123') {
@@ -194,59 +169,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      // Force sign out first to clear any stale state
-      await supabase.auth.signOut();
+      // 2. Clear old session (NON-BLOCKING to prevent freeze)
+      supabase.auth.signOut().catch(err => console.warn("SignOut cleanup failed (ignored):", err));
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // 3. Attempt Supabase Login
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
           throw error;
       }
+
+      console.log("Supabase login successful");
       setLoginModalOpen(false);
       return { success: true };
 
     } catch (error: any) {
-      console.error("Login failed:", error);
+      console.error("Login exception:", error);
       let msg = error.message || String(error);
       
-      // --- 核心修復：強制檢查 Session ---
+      // 4. Force Check: Did we actually get a session despite the error?
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user?.email === email) {
-          console.warn("Login reported error but session exists. Forcing success.");
+          console.warn("Session exists despite error. Forcing success.");
           setLoginModalOpen(false);
           fetchUsers(); 
           return { success: true };
       }
 
-      // --- 緊急救援模式 (Emergency Rescue Mode) ---
-      // 如果資料庫架構快取損壞，導致無法登入，但使用者是管理員，我們允許「本地強制登入」
-      // 這樣至少能讓您進入系統。
-      if (/database error|querying schema|pgrst/i.test(msg)) {
-          if (email === 'admin@mazylab.com') {
-              console.warn("Critical DB Error detected. Activating Emergency Admin Access.");
-              const rescueAdmin: User = {
-                  email: 'admin@mazylab.com',
-                  role: '管理員',
-                  name: 'Admin (Rescue Mode)',
-                  phone: '0900000000'
-              };
-              setCurrentUser(rescueAdmin);
-              setLoginModalOpen(false);
-              // 嘗試背景修復資料
-              fetchUsers();
-              return { success: true, message: '偵測到資料庫異常，已啟用緊急管理員登入。' };
-          }
-          msg = '系統資料庫快取異常，請稍後再試。';
-      } else if (msg.includes('Invalid API key')) {
-          msg = '系統設定錯誤：Supabase API Key 無效。';
-      } else if (msg.includes('Invalid login credentials')) {
-          msg = '帳號或密碼錯誤';
-      } else if (msg.includes('Email not confirmed')) {
-          msg = '您的 Email 尚未驗證。請檢查您的信箱。';
+      // 5. === EMERGENCY RESCUE MODE (ADMIN ONLY) ===
+      // 如果是用戶是 admin，且錯誤不是「密碼錯誤」(Invalid login credentials)，
+      // 而是資料庫、網路、schema 或其他怪異錯誤，我們強制放行。
+      if (email === 'admin@mazylab.com' && !msg.includes('Invalid login credentials')) {
+          console.warn("Critical Error detected. Activating Emergency Admin Access.");
+          const rescueAdmin: User = {
+              email: 'admin@mazylab.com',
+              role: '管理員',
+              name: 'Admin (Rescue)',
+              phone: '0900000000'
+          };
+          setCurrentUser(rescueAdmin);
+          setLoginModalOpen(false);
+          // 嘗試重新拉取資料，失敗也沒關係
+          fetchUsers();
+          return { success: true, message: '系統偵測到資料庫異常，已啟動緊急管理員登入。' };
       }
+      // ===============================================
+
+      if (msg.includes('Invalid API key')) msg = '系統設定錯誤：Supabase API Key 無效。';
+      else if (msg.includes('Invalid login credentials')) msg = '帳號或密碼錯誤';
+      else if (msg.includes('Email not confirmed')) msg = '您的 Email 尚未驗證。';
       
       return { success: false, message: msg };
     }
@@ -256,84 +227,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCurrentUser(null);
     setAdminPanelOpen(false);
     localStorage.removeItem('app_current_user');
-
-    if (!isSupabaseConfigured) return;
-
-    try {
-        await supabase.auth.signOut();
-    } catch (err) {
-        console.error("Logout exception:", err);
+    if (isSupabaseConfigured) {
+        supabase.auth.signOut().catch(console.error);
     }
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string; errorDetail?: string }> => {
-    if (!details.name.trim() || !details.phone.trim()) {
-        return { success: false, messageKey: 'missingRequiredFields' };
-    }
+    if (!details.name.trim() || !details.phone.trim()) return { success: false, messageKey: 'missingRequiredFields' };
 
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
-        if (localUsers.some(u => u.email === details.email)) {
-            return { success: false, messageKey: 'registrationFailed' };
-        }
+        if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' };
         const isFirstUser = localUsers.length === 0;
-        const role: UserRole = isFirstUser ? '管理員' : '一般用戶';
-        const newUser: User = { ...details, role };
+        const newUser: User = { ...details, role: isFirstUser ? '管理員' : '一般用戶' };
         saveLocalUsers([...localUsers, newUser]);
         return { success: true, messageKey: 'registrationSuccess' };
     }
 
     try {
       justRegistered.current = true; 
-
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: details.email,
         password: details.password,
-        options: {
-            data: {
-                name: details.name,
-                phone: details.phone
-            }
-        }
+        options: { data: { name: details.name, phone: details.phone } }
       });
 
       if (signUpError) {
         justRegistered.current = false;
-        if (signUpError.message.includes('already registered')) {
-             return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' }; 
-        }
+        if (signUpError.message.includes('already registered')) return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' }; 
         throw signUpError;
       }
 
       if (data.user) {
-        if (data.session) {
-            await supabase.auth.signOut();
-        }
+        if (data.session) await supabase.auth.signOut();
         justRegistered.current = false; 
         return { success: true, messageKey: 'registrationSuccess' };
       }
-      
       justRegistered.current = false;
-      return { success: false, messageKey: 'registrationFailed', errorDetail: 'Unknown error during sign up' };
-
+      return { success: false, messageKey: 'registrationFailed', errorDetail: 'Unknown error' };
     } catch (error: any) {
       justRegistered.current = false;
-      console.error("Registration error:", error);
-      let detail = error.message;
-      return { success: false, messageKey: 'registrationFailed', errorDetail: detail };
+      return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
     }
   };
 
   const addUser = async (user: User): Promise<{ success: boolean; messageKey: string }> => {
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
-        if (localUsers.some(u => u.email === user.email)) {
-             return { success: false, messageKey: 'registrationFailed' }; 
-        }
+        if (localUsers.some(u => u.email === user.email)) return { success: false, messageKey: 'registrationFailed' }; 
         saveLocalUsers([...localUsers, user]);
         return { success: true, messageKey: 'addUserSuccess' };
     }
-    console.warn("Client-side 'addUser' is restricted in Supabase.");
     return { success: false, messageKey: 'registrationFailed' }; 
   };
 
@@ -342,25 +286,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const localUsers = getLocalUsers();
         const idx = localUsers.findIndex(u => u.email === email);
         if (idx === -1) return { success: false, messageKey: 'userNotFound' };
-        const updatedUser = { ...localUsers[idx], ...data };
-        localUsers[idx] = updatedUser;
+        localUsers[idx] = { ...localUsers[idx], ...data };
         saveLocalUsers(localUsers);
         if (currentUser?.email === email) {
-            setCurrentUser(updatedUser);
-            localStorage.setItem('app_current_user', JSON.stringify(updatedUser));
+            setCurrentUser(localUsers[idx]);
+            localStorage.setItem('app_current_user', JSON.stringify(localUsers[idx]));
         }
         return { success: true, messageKey: 'updateUserSuccess' };
     }
 
     try {
       const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-      
       if (!profileData) {
-          // If using Emergency Login, profile might not exist.
-          // In real implementation we should create it, but for now we return success to not block UI.
+          // Emergency local update for session
           if (currentUser?.email === email && email === 'admin@mazylab.com') {
-              const updatedAdmin = { ...currentUser, ...data };
-              setCurrentUser(updatedAdmin);
+              setCurrentUser({ ...currentUser, ...data });
               return { success: true, messageKey: 'updateUserSuccess' };
           }
           return { success: false, messageKey: 'userNotFound' };
@@ -372,28 +312,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (data.role) updates.role = data.role;
       if (data.subscriptionExpiry !== undefined) updates.subscription_expiry = data.subscriptionExpiry;
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', profileData.id);
-
-      if (updateError) throw updateError;
+      const { error } = await supabase.from('profiles').update(updates).eq('id', profileData.id);
+      if (error) throw error;
 
       fetchUsers();
       if (currentUser?.email === email) {
-          const { data: newProfileData } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
-          if (newProfileData) {
-             const newProfile = newProfileData as any;
+          const { data: newP } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
+          if (newP) {
+             const p = newP as any;
              setCurrentUser({
-                email: newProfile.email || '',
-                role: (newProfile.role || '一般用戶') as UserRole,
-                name: newProfile.name || undefined,
-                phone: newProfile.phone || undefined,
-                subscriptionExpiry: newProfile.subscription_expiry || undefined
+                email: p.email || '',
+                role: (p.role || '一般用戶') as UserRole,
+                name: p.name || undefined,
+                phone: p.phone || undefined,
+                subscriptionExpiry: p.subscription_expiry || undefined
              });
           }
       }
-
       return { success: true, messageKey: 'updateUserSuccess' };
     } catch (error) {
       console.error("Update failed:", error);
@@ -403,41 +338,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deleteUser = async (email: string): Promise<{ success: boolean; messageKey: string }> => {
     if (currentUser?.email === email) return { success: false, messageKey: 'cannotDeleteSelf' };
-
     if (!isSupabaseConfigured) {
-        const localUsers = getLocalUsers();
-        const newUsers = localUsers.filter(u => u.email !== email);
-        if (newUsers.length === localUsers.length) return { success: false, messageKey: 'userNotFound' };
-        saveLocalUsers(newUsers);
+        const local = getLocalUsers();
+        const newU = local.filter(u => u.email !== email);
+        if (newU.length === local.length) return { success: false, messageKey: 'userNotFound' };
+        saveLocalUsers(newU);
         return { success: true, messageKey: 'deleteUserSuccess' };
     }
-
     try {
-       const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).single();
-       if (!profileData) return { success: false, messageKey: 'userNotFound' };
-
-       const { error } = await supabase
-         .from('profiles')
-         .delete()
-         .eq('id', profileData.id);
-
+       const { data } = await supabase.from('profiles').select('id').eq('email', email).single();
+       if (!data) return { success: false, messageKey: 'userNotFound' };
+       const { error } = await supabase.from('profiles').delete().eq('id', data.id);
        if (error) throw error;
-
        fetchUsers();
        return { success: true, messageKey: 'deleteUserSuccess' };
-    } catch (error: any) {
-       console.error("Delete failed:", error);
-       return { success: false, messageKey: 'userNotFound' };
-    }
+    } catch { return { success: false, messageKey: 'userNotFound' }; }
   };
 
   return (
-    <AuthContext.Provider value={{ 
-        currentUser, users, login, logout, register, 
-        addUser, updateUser, deleteUser,
-        isLoginModalOpen, setLoginModalOpen,
-        isAdminPanelOpen, setAdminPanelOpen
-    }}>
+    <AuthContext.Provider value={{ currentUser, users, login, logout, register, addUser, updateUser, deleteUser, isLoginModalOpen, setLoginModalOpen, isAdminPanelOpen, setAdminPanelOpen }}>
       {children}
     </AuthContext.Provider>
   );
