@@ -9,8 +9,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // 使用 Optional Chaining (?.) 避免在某些環境下 import.meta.env 未定義導致崩潰
 const env = (import.meta as any).env || {};
-const supabaseUrl = env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
+// 使用 trim() 去除可能不小心複製到的空白字元
+const supabaseUrl = (env.VITE_SUPABASE_URL || '').trim();
+const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 // 匯出設定狀態供其他元件檢查
 // 只有當 URL 和 Key 都有值的時候，才視為已設定

@@ -194,7 +194,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true };
     } catch (error: any) {
       console.error("Login failed:", error);
-      return { success: false, message: error.message || '登入失敗，請檢查帳號密碼' };
+      let msg = error.message || '登入失敗，請檢查帳號密碼';
+      if (msg.includes('Invalid API key')) {
+          msg = '系統設定錯誤：Supabase API Key 無效。請檢查環境變數是否正確 (有無多餘空白)。';
+      } else if (msg.includes('Invalid login credentials')) {
+          msg = '帳號或密碼錯誤';
+      }
+      return { success: false, message: msg };
     }
   };
 
@@ -279,7 +285,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     } catch (error: any) {
       console.error("Registration error:", error);
-      return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
+      let detail = error.message;
+      if (detail.includes('Invalid API key')) {
+          detail = '系統設定錯誤：Supabase API Key 無效。請檢查環境變數。';
+      }
+      return { success: false, messageKey: 'registrationFailed', errorDetail: detail };
     }
   };
 
