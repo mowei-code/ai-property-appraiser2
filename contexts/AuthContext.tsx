@@ -145,9 +145,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
-    console.log("Login attempt:", email); // Debug log
+    console.log("Login attempt:", email); 
 
-    // 1. Local Mode Logic
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === password);
@@ -169,11 +168,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      // 2. Clear old session (NON-BLOCKING to prevent freeze)
+      // 2. Clear old session (NON-BLOCKING)
       supabase.auth.signOut().catch(err => console.warn("SignOut cleanup failed (ignored):", err));
 
-      // 3. Attempt Supabase Login
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      // 3. Attempt Supabase Login with Timeout (Fix hanging)
+      // If network is weird, Supabase client might hang forever. We force a timeout after 5 seconds.
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), 5000));
+      
+      const { data, error } = await Promise.race([
+          supabase.auth.signInWithPassword({ email, password }),
+          timeout
+      ]) as any;
 
       if (error) {
           throw error;
@@ -197,8 +202,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // 5. === EMERGENCY RESCUE MODE (ADMIN ONLY) ===
-      // 如果是用戶是 admin，且錯誤不是「密碼錯誤」(Invalid login credentials)，
-      // 而是資料庫、網路、schema 或其他怪異錯誤，我們強制放行。
+      // If error is timeout or unknown network error, allow admin to pass through
       if (email === 'admin@mazylab.com' && !msg.includes('Invalid login credentials')) {
           console.warn("Critical Error detected. Activating Emergency Admin Access.");
           const rescueAdmin: User = {
@@ -209,15 +213,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           setCurrentUser(rescueAdmin);
           setLoginModalOpen(false);
-          // 嘗試重新拉取資料，失敗也沒關係
           fetchUsers();
-          return { success: true, message: '系統偵測到資料庫異常，已啟動緊急管理員登入。' };
+          return { success: true, message: '系統偵測到資料庫連線異常，已強制啟用緊急管理員登入。' };
       }
-      // ===============================================
 
       if (msg.includes('Invalid API key')) msg = '系統設定錯誤：Supabase API Key 無效。';
       else if (msg.includes('Invalid login credentials')) msg = '帳號或密碼錯誤';
       else if (msg.includes('Email not confirmed')) msg = '您的 Email 尚未驗證。';
+      else if (msg.includes('timed out')) msg = '連線逾時，請檢查網路狀況。';
       
       return { success: false, message: msg };
     }

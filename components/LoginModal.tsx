@@ -36,6 +36,7 @@ export const LoginModal: React.FC = () => {
   const [error, setError] = useState('');
   const [emailStatus, setEmailStatus] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isRegister) {
@@ -73,35 +74,52 @@ export const LoginModal: React.FC = () => {
 
   const handleMainSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return; // Prevent double submit
+    
     setError('');
     if (!email || !password) { setError(t('error_fillEmailPassword')); return; }
     
-    if (isRegister) {
-       if (!name.trim() || !phone.trim()) { setError(t('error_fillNamePhone')); return; }
-       if (captcha !== generatedCaptcha) { 
-           setError(t('captchaError')); 
-           setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
-           return; 
-       }
+    setIsLoading(true);
 
-       const result = await register({ email, password, name, phone });
-       if (!result.success) {
-         setError(t(result.messageKey));
-         // Show detailed DB error if available (debugging purpose)
-         if (result.errorDetail) {
-             setError(prev => `${prev} (${result.errorDetail})`);
-         }
-         setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
-       } else {
-           setRegistrationSuccess(true);
-           setEmailStatus('正在發送通知信...');
-           await notifyRegistration(email, name, phone);
-       }
-    } else {
-      const loginResult = await login(email, password);
-      if (!loginResult.success) {
-          setError(loginResult.message || t('loginFailed'));
-      }
+    try {
+        if (isRegister) {
+           if (!name.trim() || !phone.trim()) { 
+               setError(t('error_fillNamePhone')); 
+               setIsLoading(false);
+               return; 
+           }
+           if (captcha !== generatedCaptcha) { 
+               setError(t('captchaError')); 
+               setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
+               setIsLoading(false);
+               return; 
+           }
+
+           const result = await register({ email, password, name, phone });
+           if (!result.success) {
+             setError(t(result.messageKey));
+             // Show detailed DB error if available (debugging purpose)
+             if (result.errorDetail) {
+                 setError(prev => `${prev} (${result.errorDetail})`);
+             }
+             setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
+           } else {
+               setRegistrationSuccess(true);
+               setEmailStatus('正在發送通知信...');
+               await notifyRegistration(email, name, phone);
+           }
+        } else {
+          console.log("Submitting login form...");
+          const loginResult = await login(email, password);
+          if (!loginResult.success) {
+              setError(loginResult.message || t('loginFailed'));
+          }
+        }
+    } catch (e) {
+        console.error("Form error:", e);
+        setError('發生未預期的錯誤');
+    } finally {
+        setIsLoading(false);
     }
   };
   
@@ -202,7 +220,17 @@ export const LoginModal: React.FC = () => {
                     </div>
                 )}
                 
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg transition-colors shadow-md">
+                <button 
+                    type="submit" 
+                    disabled={isLoading}
+                    className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                >
+                    {isLoading && (
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    )}
                     {isRegister ? t('register') : t('login')}
                 </button>
                 <p className="text-center text-sm cursor-pointer text-blue-600 dark:text-blue-400 hover:underline" onClick={toggleFormType}>
