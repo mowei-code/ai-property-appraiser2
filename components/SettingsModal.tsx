@@ -39,7 +39,7 @@ class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBound
     if (this.state.hasError) {
       return this.props.fallback(this.state.error!);
     }
-    return this.props.children;
+    return this.props.children || null;
   }
 }
 
@@ -165,9 +165,11 @@ export const SettingsModal: React.FC = () => {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
         const { checked } = e.target as HTMLInputElement;
+        // Use 'as any' to bypass TypeScript strict check for dynamic keys
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     } else {
-        setLocalSettings(prev => ({ ...prev, [name]: value }));
+        // Use 'as any' because 'value' is string but some Settings keys are specific string unions
+        setLocalSettings(prev => ({ ...prev, [name]: value as any }));
     }
   };
 
