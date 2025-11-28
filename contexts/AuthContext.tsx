@@ -250,15 +250,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    if (!isSupabaseConfigured) {
-        localStorage.removeItem('app_current_user');
-        setCurrentUser(null);
-        setAdminPanelOpen(false);
-        return;
-    }
-    await supabase.auth.signOut();
+    // 1. Force Clear UI State Immediately (Optimistic update)
+    // 這確保即使後端 API 卡住，使用者介面也會立即顯示為登出狀態
     setCurrentUser(null);
     setAdminPanelOpen(false);
+    
+    // 2. Clear Local Fallback
+    localStorage.removeItem('app_current_user');
+
+    if (!isSupabaseConfigured) {
+        return;
+    }
+
+    // 3. Attempt Supabase SignOut
+    try {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.warn("Supabase signOut completed with warning:", error.message);
+        }
+    } catch (err) {
+        // 如果 signOut 拋出錯誤 (例如網絡問題)，我們已經在第1步清除了UI狀態，所以只需記錄錯誤
+        console.error("Logout exception:", err);
+    }
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string; errorDetail?: string }> => {
