@@ -185,6 +185,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
+      // Force sign out first to clear any stale state that might cause issues
+      await supabase.auth.signOut();
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -205,6 +208,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           msg = '帳號或密碼錯誤';
       } else if (msg.includes('Email not confirmed')) {
           msg = '您的 Email 尚未驗證。請檢查您的信箱。';
+      } else if (msg.includes('Database error querying schema') || msg.includes('PGRST200')) {
+          msg = '資料庫連線權限異常 (Schema Permission)。請聯繫管理員修復權限 (GRANT USAGE)。';
       }
       
       return { success: false, message: msg };
