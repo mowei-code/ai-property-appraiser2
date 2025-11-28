@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import type { User, UserRole } from '../types';
 
@@ -25,6 +25,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
+  
+  // Track if a registration process is active to prevent auto-login flash
+  const justRegistered = useRef(false);
 
   // --- Local Storage Helpers (Fallback Mode) ---
   const getLocalUsers = (): User[] => {
@@ -159,6 +162,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Listen for auth changes (Only for Supabase)
     if (isSupabaseConfigured) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          // Prevent auto-login flash if we just registered (we want to force manual login flow)
+          if (justRegistered.current && event === 'SIGNED_IN') {
+             return;
+          }
+
           if (session?.user) {
              // Wait a tiny bit for the trigger (if any) or insertion to complete
              if (event === 'SIGNED_IN') await new Promise(r => setTimeout(r, 500));
@@ -297,6 +305,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
+      justRegistered.current = true; // Set flag to block auto-login listener
+
       // 1. Sign up in Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: details.email,
@@ -304,6 +314,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       if (signUpError) {
+        justRegistered.current = false; // Reset flag on error
         if (signUpError.message.includes('already registered')) {
              return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' }; 
         }
@@ -333,15 +344,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("Profile creation failed:", profileError);
             // Don't fail the whole registration, let the auto-heal logic in useEffect handle it on first login
             // But log it clearly.
-            return { success: true, messageKey: 'registrationSuccess', errorDetail: 'Auth OK, Profile DB pending (will auto-heal on login)' };
+            // Don't return here, proceed to signOut to keep flow clean
         }
         
-        fetchUsers();
+        // 3. Force Sign Out to ensure the user stays on the Success Screen
+        // This prevents the app from auto-logging in and showing the Main Panel underneath the modal.
+        if (data.session) {
+            await supabase.auth.signOut();
+        }
+
+        justRegistered.current = false; // Reset flag
+        
+        // Use timeout to allow RLS/Auth state to propagate if needed, though not strictly required after signout
+        fetchUsers(); 
+        
         return { success: true, messageKey: 'registrationSuccess' };
       }
+      
+      justRegistered.current = false; // Reset flag
       return { success: false, messageKey: 'registrationFailed', errorDetail: 'Unknown error during sign up' };
 
     } catch (error: any) {
+      justRegistered.current = false; // Reset flag
       console.error("Registration error:", error);
       let detail = error.message;
       if (detail.includes('Invalid API key')) {
