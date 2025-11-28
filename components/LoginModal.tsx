@@ -5,6 +5,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
+import { isSupabaseConfigured } from '../supabaseClient'; // Import status check
 
 // 內建 EyeIcon 與 EyeSlashIcon 以避免新增檔案依賴
 const EyeIcon = ({ className }: { className?: string }) => (
@@ -83,9 +84,13 @@ export const LoginModal: React.FC = () => {
            return; 
        }
 
-       const result = register({ email, password, name, phone });
+       const result = await register({ email, password, name, phone });
        if (!result.success) {
          setError(t(result.messageKey));
+         // Show detailed DB error if available (debugging purpose)
+         if (result.errorDetail) {
+             setError(prev => `${prev} (${result.errorDetail})`);
+         }
          setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
        } else {
            setRegistrationSuccess(true);
@@ -93,7 +98,10 @@ export const LoginModal: React.FC = () => {
            await notifyRegistration(email, name, phone);
        }
     } else {
-      if (!login(email, password)) setError(t('loginFailed'));
+      const loginResult = await login(email, password);
+      if (!loginResult.success) {
+          setError(loginResult.message || t('loginFailed'));
+      }
     }
   };
   
@@ -188,7 +196,12 @@ export const LoginModal: React.FC = () => {
                     </div>
                 )}
                 
-                {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+                {error && (
+                    <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800 break-words">
+                        {error}
+                    </div>
+                )}
+                
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg transition-colors shadow-md">
                     {isRegister ? t('register') : t('login')}
                 </button>
@@ -197,6 +210,12 @@ export const LoginModal: React.FC = () => {
                 </p>
             </form>
           )}
+        </div>
+        
+        {/* Connection Status Footer */}
+        <div className={`px-4 py-2 text-[10px] text-center border-t ${isSupabaseConfigured ? 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'}`}>
+            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線 (Supabase)' : '本地離線模式 (Local Storage)'}
+            {!isSupabaseConfigured && ' (請檢查 Vercel 環境變數 VITE_SUPABASE_URL)'}
         </div>
       </div>
     </div>

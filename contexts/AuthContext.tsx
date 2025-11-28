@@ -6,9 +6,9 @@ import type { User, UserRole } from '../types';
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
-  register: (details: { email: string; password: string; name: string; phone: string; }) => Promise<{ success: boolean; messageKey: string }>;
+  register: (details: { email: string; password: string; name: string; phone: string; }) => Promise<{ success: boolean; messageKey: string; errorDetail?: string }>;
   addUser: (user: User) => Promise<{ success: boolean; messageKey: string }>;
   updateUser: (email: string, data: Partial<User>) => Promise<{ success: boolean; messageKey: string }>;
   deleteUser: (email: string) => Promise<{ success: boolean; messageKey: string }>;
@@ -105,6 +105,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             phone: profile.phone || undefined,
             subscriptionExpiry: profile.subscription_expiry || undefined
           });
+        } else {
+            // Should verify if user exists in Auth but not in Profiles (edge case)
+            setCurrentUser({
+                email: session.user.email || '',
+                role: '一般用戶'
+            });
         }
       }
       
@@ -132,6 +138,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 phone: profile.phone || undefined,
                 subscriptionExpiry: profile.subscription_expiry || undefined
               });
+            } else {
+                // Handle case where profile doesn't exist yet (e.g. immediately after signup before insert completes)
+                setCurrentUser({
+                    email: session.user.email || '',
+                    role: '一般用戶'
+                });
             }
             fetchUsers();
           } else {
@@ -143,7 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     if (!isSupabaseConfigured) {
         // Local Mock Login
         const localUsers = getLocalUsers();
@@ -157,16 +169,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              setCurrentUser(adminUser);
              localStorage.setItem('app_current_user', JSON.stringify(adminUser));
              setLoginModalOpen(false);
-             return true;
+             return { success: true };
         }
 
         if (user) {
             setCurrentUser(user);
             localStorage.setItem('app_current_user', JSON.stringify(user));
             setLoginModalOpen(false);
-            return true;
+            return { success: true };
         }
-        return false;
+        return { success: false, message: '電子郵件或密碼錯誤 (本地模式)' };
     }
 
     try {
@@ -175,12 +187,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+          throw error;
+      }
       setLoginModalOpen(false);
-      return true;
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error("Login failed:", error);
-      return false;
+      return { success: false, message: error.message || '登入失敗，請檢查帳號密碼' };
     }
   };
 
@@ -196,7 +210,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAdminPanelOpen(false);
   };
 
-  const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string }> => {
+  const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string; errorDetail?: string }> => {
     if (!details.name.trim() || !details.phone.trim()) {
         return { success: false, messageKey: 'missingRequiredFields' };
     }
@@ -227,15 +241,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (signUpError) {
         if (signUpError.message.includes('already registered')) {
-             return { success: false, messageKey: 'registrationFailed' }; 
+             return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' }; 
         }
         throw signUpError;
       }
 
       if (data.user) {
         // 2. Create Profile Record
-        const isFirstUser = users.length === 0;
-        const role: UserRole = isFirstUser ? '管理員' : '一般用戶';
+        // Check if any profiles exist to determine if this is the first user (Admin)
+        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        const role: UserRole = (count === 0) ? '管理員' : '一般用戶';
 
         const { error: profileError } = await supabase
           .from('profiles')
@@ -249,16 +264,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           ]);
 
-        if (profileError) throw profileError;
+        if (profileError) {
+            console.error("Profile creation failed:", profileError);
+            // Even if profile creation fails, the user is created in Auth. 
+            // We should probably inform the user or handle this.
+            // For now, return error so they see it.
+            return { success: false, messageKey: 'registrationFailed', errorDetail: 'Profile DB Error: ' + profileError.message };
+        }
         
         fetchUsers();
         return { success: true, messageKey: 'registrationSuccess' };
       }
-      return { success: false, messageKey: 'registrationFailed' };
+      return { success: false, messageKey: 'registrationFailed', errorDetail: 'Unknown error during sign up' };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Registration error:", error);
-      return { success: false, messageKey: 'registrationFailed' };
+      return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
     }
   };
 
