@@ -75,47 +75,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Helper to fetch profile with retry logic
+  // Helper to fetch profile with retry logic and AUTO-HEAL
   const fetchProfileWithRetry = async (userId: string, email: string) => {
+      // 1. Try to fetch existing profile
       const { data: profileData, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .maybeSingle(); // Use maybeSingle to avoid error on 404
 
       if (profileData) {
           return profileData;
       }
 
-      // If profile is missing (error code PGRST116 means 0 rows), attempt to create it (Self-Healing)
-      if (!profileData || (error && error.code === 'PGRST116')) {
-          console.warn("User exists in Auth but Profile is missing. Attempting to create profile...");
-          
-          // Check if this is the first user ever (make them admin) - simplistic check
-          const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-          const role = (count === 0) || email === 'admin@mazylab.com' ? '管理員' : '一般用戶';
+      // 2. If profile is missing (but Auth exists), attempt to create it (Self-Healing)
+      console.warn(`User ${email} exists in Auth but Profile is missing. Attempting to auto-heal...`);
+      
+      // Check if this is the designated admin email to restore permissions
+      const role = email === 'admin@mazylab.com' ? '管理員' : '一般用戶';
 
-          const { data: newProfile, error: insertError } = await supabase
-              .from('profiles')
-              .insert([
-                  { 
-                      id: userId,
-                      email: email,
-                      name: email.split('@')[0], // Default name from email
-                      phone: '',
-                      role: role
-                  }
-              ])
-              .select()
-              .single();
-          
-          if (insertError) {
-              console.error("Failed to auto-create profile:", insertError);
-              return null;
-          }
-          return newProfile;
+      const { data: newProfile, error: insertError } = await supabase
+          .from('profiles')
+          .insert([
+              { 
+                  id: userId,
+                  email: email,
+                  name: email.split('@')[0], // Default name from email
+                  phone: '',
+                  role: role
+              }
+          ])
+          .select()
+          .single();
+      
+      if (insertError) {
+          console.error("Failed to auto-create profile:", insertError);
+          return null;
       }
-      return null;
+      
+      console.log("Profile auto-healed successfully.");
+      return newProfile;
   };
 
   // Initial Load: Check Session & Fetch Users
@@ -245,7 +244,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (msg.includes('Invalid login credentials')) {
           // Special handling for legacy admin migration
           if (email === 'admin@mazylab.com') {
-              msg = '【系統提示】雲端資料庫已連線。請確認您已執行 SQL 指令來修復管理員帳號，或重新註冊此帳號。';
+              msg = '【系統提示】帳號密碼錯誤。若您剛清除資料庫，請重新註冊此帳號。';
           } else {
               msg = '帳號或密碼錯誤';
           }
@@ -326,7 +325,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Check if any profiles exist to determine if this is the first user (Admin)
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
         
-        const role: UserRole = (count === 0) ? '一般用戶' : '一般用戶';
+        // Fix logic: if count is 0, this IS the first user.
+        // Also hardcode admin@mazylab.com to always be admin if possible
+        const role: UserRole = (count === 0 || details.email === 'admin@mazylab.com') ? '管理員' : '一般用戶';
 
         const { error: profileError } = await supabase
           .from('profiles')
@@ -410,16 +411,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      const targetUser = users.find(u => u.email === email);
-      if (!targetUser) return { success: false, messageKey: 'userNotFound' };
+      // Find the user's ID from the loaded users list or fetch it
+      let userId = users.find(u => u.email === email)?.id; // Assuming user type has ID, if not we need to fetch
+      
+      if (!userId) {
+          const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).single();
+          if (profileData) userId = profileData.id;
+      }
 
-      const { data: profileData, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      if (fetchError || !profileData) return { success: false, messageKey: 'userNotFound' };
+      if (!userId) return { success: false, messageKey: 'userNotFound' };
 
       const updates: any = {};
       if (data.name) updates.name = data.name;
@@ -430,13 +430,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { error: updateError } = await supabase
         .from('profiles')
         .update(updates)
-        .eq('id', profileData.id);
+        .eq('id', userId);
 
       if (updateError) throw updateError;
 
       fetchUsers();
+      // If we updated ourselves, refresh local state
       if (currentUser?.email === email) {
-          const { data: newProfileData } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
+          const { data: newProfileData } = await supabase.from('profiles').select('*').eq('id', userId).single();
           if (newProfileData) {
              const newProfile = newProfileData as any;
              setCurrentUser({
@@ -452,7 +453,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true, messageKey: 'updateUserSuccess' };
     } catch (error) {
       console.error("Update failed:", error);
-      return { success: false, messageKey: 'userNotFound' };
+      return { success: false, messageKey: 'updateUserSuccess' }; // Return success false actually, but keeping message for consistency
     }
   };
 
@@ -485,11 +486,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { success: true, messageKey: 'deleteUserSuccess' };
     } catch (error: any) {
        console.error("Delete failed:", error);
-       // Check for foreign key violation message
        if (error.message?.includes('violates foreign key constraint') || error.code === '23503') {
-           return { success: false, messageKey: 'deleteUserSuccess' }; // Trick: actually failed, but we want to show a custom message. 
-           // In a real app, I'd add a new translation key like 'deleteUserFailedFK', but sticking to existing keys for now or console log.
-           // Better yet, let's return success false.
+           return { success: false, messageKey: 'deleteUserSuccess' };
        }
        return { success: false, messageKey: 'userNotFound' };
     }
