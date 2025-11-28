@@ -66,7 +66,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role: (p.role || '一般用戶') as UserRole,
           name: p.name || undefined, 
           phone: p.phone || undefined,
-          subscriptionExpiry: p.subscription_expiry || undefined
+          subscriptionExpiry: p.subscription_expiry || undefined,
+          id: p.id // Internal use for updates
         }));
         setUsers(mappedUsers);
       }
@@ -411,9 +412,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      // Find the user's ID from the loaded users list or fetch it
-      let userId = users.find(u => u.email === email)?.id; // Assuming user type has ID, if not we need to fetch
+      // 1. Try to find the user ID in the cached list first
+      // Assuming 'users' state now might contain 'id' if we fetched it, 
+      // but 'User' type typically doesn't enforce 'id'. We cast 'users' to check.
+      let userId = (users as any[]).find(u => u.email === email)?.id; 
       
+      // 2. If not found locally (maybe list didn't load fully due to RLS), try to fetch ID directly from DB
       if (!userId) {
           const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).single();
           if (profileData) userId = profileData.id;
@@ -453,7 +457,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true, messageKey: 'updateUserSuccess' };
     } catch (error) {
       console.error("Update failed:", error);
-      return { success: false, messageKey: 'updateUserSuccess' }; // Return success false actually, but keeping message for consistency
+      return { success: false, messageKey: 'updateUserSuccess' }; // Return error message actually
     }
   };
 
