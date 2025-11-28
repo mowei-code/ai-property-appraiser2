@@ -195,11 +195,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error: any) {
       console.error("Login failed:", error);
       let msg = error.message || '登入失敗，請檢查帳號密碼';
+      
+      // Translate common Supabase errors
       if (msg.includes('Invalid API key')) {
           msg = '系統設定錯誤：Supabase API Key 無效。請檢查環境變數是否正確 (有無多餘空白)。';
       } else if (msg.includes('Invalid login credentials')) {
-          msg = '帳號或密碼錯誤';
+          // Special handling for legacy admin migration
+          if (email === 'admin@mazylab.com') {
+              msg = '【系統提示】雲端資料庫已連線，舊的本地管理員帳號不存在。請直接點擊下方「點此註冊」，重新註冊此帳號，並至 Supabase 資料庫修改 Role 為「管理員」。';
+          } else {
+              msg = '帳號或密碼錯誤';
+          }
+      } else if (msg.includes('Email not confirmed')) {
+          msg = '您的 Email 尚未驗證。請檢查您的信箱，或請管理員確認 Supabase 的 Site URL 設定是否正確 (導致連結無效)。';
       }
+      
       return { success: false, message: msg };
     }
   };
@@ -256,7 +266,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // 2. Create Profile Record
         // Check if any profiles exist to determine if this is the first user (Admin)
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        const role: UserRole = (count === 0) ? '管理員' : '一般用戶';
+        // NOTE: In Cloud mode, we default to '一般用戶' to be safe. 
+        // Users must manually promote themselves in the Supabase Dashboard.
+        const role: UserRole = (count === 0) ? '一般用戶' : '一般用戶';
 
         const { error: profileError } = await supabase
           .from('profiles')
