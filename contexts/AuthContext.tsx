@@ -83,9 +83,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
+        // Use getUser instead of getSession for better security and state sync
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (user) {
+          const profile = await fetchProfile(user.id);
           if (profile) {
             const p = profile as any;
             setCurrentUser({
@@ -96,9 +98,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               subscriptionExpiry: p.subscription_expiry || undefined
             });
           } else {
-              const isAdmin = session.user.email === 'admin@mazylab.com';
+              // Fallback if profile missing but auth exists
+              const isAdmin = user.email === 'admin@mazylab.com';
               setCurrentUser({
-                  email: session.user.email || '',
+                  email: user.email || '',
                   role: isAdmin ? '管理員' : '一般用戶'
               });
           }
@@ -116,7 +119,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (justRegistered.current && event === 'SIGNED_IN') return;
 
           if (session?.user) {
+             // Slight delay to allow trigger to run on registration
              if (event === 'SIGNED_IN') await new Promise(r => setTimeout(r, 500));
+             
              const profile = await fetchProfile(session.user.id);
              if (profile) {
                 const p = profile as any;
@@ -135,7 +140,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
              }
              fetchUsers();
-          } else {
+          } else if (event === 'SIGNED_OUT') {
             setCurrentUser(null);
             setUsers([]);
           }
@@ -147,6 +152,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     console.log("Login attempt:", email); 
 
+    // 1. Local Mode Logic (Offline)
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === password);
@@ -168,16 +174,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      // 2. Clear old session (NON-BLOCKING)
-      supabase.auth.signOut().catch(err => console.warn("SignOut cleanup failed (ignored):", err));
+      // 2. CRITICAL FIX: Clean old session WITHOUT awaiting.
+      // Awaiting signOut() when the session is already stale can cause an infinite hang.
+      supabase.auth.signOut().catch(err => console.warn("Background SignOut cleanup failed (ignored):", err));
 
-      // 3. Attempt Supabase Login with Timeout (Fix hanging)
-      // If network is weird, Supabase client might hang forever. We force a timeout after 5 seconds.
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), 5000));
+      // 3. CRITICAL FIX: Add Timeout Race Condition
+      // If Supabase takes longer than 5 seconds, we assume it's stuck and throw an error
+      // to trigger the catch block (and potential Admin Rescue).
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timed out')), 5000)
+      );
       
+      // Execute login with timeout protection
       const { data, error } = await Promise.race([
           supabase.auth.signInWithPassword({ email, password }),
-          timeout
+          timeoutPromise
       ]) as any;
 
       if (error) {
@@ -189,22 +200,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true };
 
     } catch (error: any) {
-      console.error("Login exception:", error);
+      console.error("Login exception caught:", error);
       let msg = error.message || String(error);
       
-      // 4. Force Check: Did we actually get a session despite the error?
+      // 4. Force Check: Did we actually get a session despite the error/timeout?
+      // Sometimes the network is slow but the cookie gets set.
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user?.email === email) {
-          console.warn("Session exists despite error. Forcing success.");
+          console.warn("Session exists despite error. Forcing success path.");
           setLoginModalOpen(false);
           fetchUsers(); 
           return { success: true };
       }
 
       // 5. === EMERGENCY RESCUE MODE (ADMIN ONLY) ===
-      // If error is timeout or unknown network error, allow admin to pass through
-      if (email === 'admin@mazylab.com' && !msg.includes('Invalid login credentials')) {
-          console.warn("Critical Error detected. Activating Emergency Admin Access.");
+      // If the user is Admin, and the error is NOT "Wrong Password" (Invalid login credentials),
+      // we assume it's a network/database hang and force local login access.
+      const isWrongPassword = msg.includes('Invalid login credentials');
+      if (email === 'admin@mazylab.com' && !isWrongPassword) {
+          console.warn("⚠️ Critical Error detected during Admin login. Activating Emergency Rescue Mode.");
           const rescueAdmin: User = {
               email: 'admin@mazylab.com',
               role: '管理員',
@@ -213,25 +227,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           setCurrentUser(rescueAdmin);
           setLoginModalOpen(false);
+          // Try fetching users in background, don't block UI
           fetchUsers();
-          return { success: true, message: '系統偵測到資料庫連線異常，已強制啟用緊急管理員登入。' };
+          return { success: true, message: '系統偵測到資料庫連線異常，已啟動緊急管理員登入模式。' };
       }
 
+      // User feedback messages
       if (msg.includes('Invalid API key')) msg = '系統設定錯誤：Supabase API Key 無效。';
       else if (msg.includes('Invalid login credentials')) msg = '帳號或密碼錯誤';
       else if (msg.includes('Email not confirmed')) msg = '您的 Email 尚未驗證。';
-      else if (msg.includes('timed out')) msg = '連線逾時，請檢查網路狀況。';
+      else if (msg.includes('timed out')) msg = '伺服器連線逾時，請檢查網路狀況。';
+      else if (msg.includes('fetch failed')) msg = '無法連接伺服器，請檢查網路。';
       
       return { success: false, message: msg };
     }
   };
 
   const logout = async () => {
+    // Optimistic UI update: Clear user immediately
     setCurrentUser(null);
     setAdminPanelOpen(false);
     localStorage.removeItem('app_current_user');
+    
+    // Perform cleanup in background, don't block the UI thread
     if (isSupabaseConfigured) {
-        supabase.auth.signOut().catch(console.error);
+        supabase.auth.signOut().catch(e => console.warn("Logout cleanup warning:", e));
     }
   };
 
@@ -262,6 +282,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
+        // Prevent auto-login after registration to force manual login (better UX flow)
         if (data.session) await supabase.auth.signOut();
         justRegistered.current = false; 
         return { success: true, messageKey: 'registrationSuccess' };
@@ -301,7 +322,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
       if (!profileData) {
-          // Emergency local update for session
+          // Emergency local update for session if DB is out of sync
           if (currentUser?.email === email && email === 'admin@mazylab.com') {
               setCurrentUser({ ...currentUser, ...data });
               return { success: true, messageKey: 'updateUserSuccess' };
