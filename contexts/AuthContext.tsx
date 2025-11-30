@@ -168,7 +168,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               setCurrentUser(null);
               setUsers([]);
           } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-               const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+               let { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+               
+               // [AUTO-FIX] If logging in as 'admin@mazylab.com' but database role is not Admin, fix it automatically.
+               // This prevents the admin from being locked out if they registered as a normal user.
+               if (session.user.email === 'admin@mazylab.com' && profile && profile.role !== '管理員') {
+                   console.log("Auto-promoting admin@mazylab.com to Admin role...");
+                   await supabase.from('profiles').update({ role: '管理員' }).eq('id', session.user.id);
+                   profile.role = '管理員';
+               }
+
                if (profile) {
                    setCurrentUser({
                        id: profile.id, email: profile.email, role: profile.role,
@@ -290,12 +299,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (signUpError) throw signUpError;
 
       if (data.user) {
+        // [AUTO-FIX] If registering 'admin@mazylab.com', force Admin role immediately.
+        const role = details.email === 'admin@mazylab.com' ? '管理員' : '一般用戶';
+
         await supabase.from('profiles').upsert([{
             id: data.user.id,
             email: details.email,
             name: details.name,
             phone: details.phone,
-            role: '一般用戶',
+            role: role,
             updated_at: new Date().toISOString(),
         }]);
         
