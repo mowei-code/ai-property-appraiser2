@@ -321,7 +321,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         options: { data: { name: details.name, phone: details.phone } }
       });
 
-      if (signUpError) throw signUpError;
+      // [SMART RECOVERY]
+      // If registration fails (likely because user exists), try to log in with the provided credentials.
+      if (signUpError) {
+          console.log("Registration error:", signUpError.message);
+          
+          // Only attempt fallback if error suggests duplication or database weirdness
+          // Try to sign in
+          const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+              email: details.email,
+              password: details.password
+          });
+
+          if (!loginError && loginData.user) {
+              console.log("Fallback login successful. Closing modal.");
+              setLoginModalOpen(false);
+              return { success: true, messageKey: 'loginSuccess' };
+          }
+          
+          // If login also failed, throw the original registration error
+          throw signUpError;
+      }
 
       if (data.user) {
         // [AUTO-FIX] If registering 'admin@mazylab.com', force Admin role immediately.
