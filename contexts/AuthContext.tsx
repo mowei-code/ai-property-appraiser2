@@ -170,8 +170,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
                let { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
                
+               // [RECOVERY] If profile is missing (e.g. deleted from profiles table but exists in Auth), recreate it.
+               if (!profile) {
+                   console.log("Profile missing for logged in user. Attempting to recreate...");
+                   const isSystemAdmin = session.user.email === 'admin@mazylab.com';
+                   const newProfile = {
+                       id: session.user.id,
+                       email: session.user.email!,
+                       name: session.user.user_metadata?.name || (isSystemAdmin ? 'System Admin' : 'User'),
+                       phone: session.user.user_metadata?.phone || '',
+                       role: isSystemAdmin ? '管理員' : '一般用戶',
+                       updated_at: new Date().toISOString(),
+                   };
+                   
+                   const { error: insertError } = await supabase.from('profiles').insert([newProfile]);
+                   
+                   if (!insertError) {
+                       profile = newProfile as any; 
+                   } else {
+                       console.error("Failed to recreate profile:", insertError);
+                   }
+               }
+
                // [AUTO-FIX] If logging in as 'admin@mazylab.com' but database role is not Admin, fix it automatically.
-               // This prevents the admin from being locked out if they registered as a normal user.
                if (session.user.email === 'admin@mazylab.com' && profile && profile.role !== '管理員') {
                    console.log("Auto-promoting admin@mazylab.com to Admin role...");
                    await supabase.from('profiles').update({ role: '管理員' }).eq('id', session.user.id);
@@ -182,6 +203,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                    setCurrentUser({
                        id: profile.id, email: profile.email, role: profile.role,
                        name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
+                   });
+               } else {
+                   // Fallback: Set currentUser from session if profile creation failed, to allow access (though limited)
+                   setCurrentUser({ 
+                       id: session.user.id, 
+                       email: session.user.email!, 
+                       role: session.user.email === 'admin@mazylab.com' ? '管理員' : '一般用戶' 
                    });
                }
                fetchUsers();
@@ -207,8 +235,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const pass = passInput.trim();
 
     // 1. Supabase Login (Standard Flow)
-    // If Supabase is configured, we ALWAYS try to authenticate with it.
-    // There are NO hardcoded backdoors here anymore.
     if (isSupabaseConfigured) {
         try {
             const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
@@ -232,7 +258,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // 2. Local Mode (Only reachable if Supabase is NOT configured via .env)
-    // This is for pure local development or demo purposes without a backend.
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === pass);
