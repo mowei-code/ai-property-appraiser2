@@ -67,7 +67,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUsers(mappedUsers);
       }
     } catch (error: any) {
-      console.warn("fetchUsers warning:", error.message);
+      console.warn("fetchUsers warning (DB might be down):", error.message);
+      
+      // [CRITICAL FIX] 若資料庫連線失敗，檢查是否有本地管理員 Session (Failsafe 登入狀態)
+      // 若是，將該管理員加入列表，避免後台空白。
+      try {
+          const storedUser = localStorage.getItem('app_current_user');
+          if (storedUser) {
+              const u = JSON.parse(storedUser);
+              // 只有在真的無法取得資料時，才退回到只顯示當前已登入的管理員
+              if (u.role === '管理員') {
+                  setUsers([u]); 
+              }
+          }
+      } catch (e) {
+          console.error("Error restoring local admin fallback:", e);
+      }
     }
   }, []);
 
@@ -248,6 +263,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setCurrentUser(adminUser);
           localStorage.setItem('app_current_user', JSON.stringify(adminUser));
           setLoginModalOpen(false);
+          // 強制觸發一次 fetchUsers，確保上面的 catch 邏輯能執行到並設定 users
           fetchUsers();
           return { success: true };
       }
