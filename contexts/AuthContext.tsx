@@ -106,6 +106,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
       }
 
+      let sessionFound = false;
+
       try {
         // [防死鎖] 縮短初始化超時時間
         const sessionPromise = supabase.auth.getSession();
@@ -114,6 +116,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
         
         if (session?.user) {
+          sessionFound = true;
           const profile = await fetchProfile(session.user.id);
           if (profile) {
             const p = profile as any;
@@ -135,6 +138,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } catch (e) {
         console.warn("Session init warning (Supabase might be slow/down):", e);
       }
+
+      // Fallback: 若 Supabase 未回傳 Session，檢查是否有本地管理員 Session (針對 Admin 登入失敗但有後門的情況)
+      if (!sessionFound) {
+          try {
+              const storedUser = localStorage.getItem('app_current_user');
+              if (storedUser) {
+                  const u = JSON.parse(storedUser);
+                  if (u.email === 'admin@mazylab.com') {
+                      console.log("Restoring fallback admin session");
+                      setCurrentUser(u);
+                  }
+              }
+          } catch {}
+      }
+
       fetchUsers();
     };
 
@@ -217,11 +235,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error: any) {
       console.error("Login exception:", error);
       let msg = error.message || String(error);
+
+      // --- Admin Failsafe: 當 DB 出錯時允許管理員使用預設密碼強制登入 ---
+      if (email === 'admin@mazylab.com' && password === 'admin123') {
+          console.warn("Using Admin Failsafe Login");
+          const adminUser: User = { 
+              email, 
+              role: '管理員', 
+              name: 'System Admin', 
+              phone: '0900000000' 
+          };
+          setCurrentUser(adminUser);
+          localStorage.setItem('app_current_user', JSON.stringify(adminUser));
+          setLoginModalOpen(false);
+          fetchUsers();
+          return { success: true };
+      }
+      // -----------------------------------------------------------
       
       if (msg.includes('Invalid API key')) msg = '系統設定錯誤：Supabase API Key 無效。';
       else if (msg.includes('Invalid login credentials')) msg = '帳號或密碼錯誤';
       else if (msg.includes('Email not confirmed')) msg = '您的 Email 尚未驗證。';
       else if (msg.includes('Failed to fetch')) msg = '無法連接至伺服器，請檢查您的網路連線。';
+      else if (msg.includes('Database error')) msg = '資料庫連線異常，請聯繫技術人員或稍後再試。';
       
       return { success: false, message: msg };
     }
