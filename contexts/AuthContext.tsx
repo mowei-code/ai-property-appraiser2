@@ -111,32 +111,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [isFailsafeMode, currentUser]);
 
-  // [Init] Check Session on Mount
-  useEffect(() => {
-    const initAuth = async () => {
-        const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
-        if (emergencyAdmin) {
-            const adminUser = JSON.parse(emergencyAdmin);
-            setCurrentUser(adminUser);
-            setIsFailsafeMode(true);
-            return; 
-        }
-
-        if (isSupabaseConfigured) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await handleSessionUser(session.user);
-            }
-        } else {
-            setIsFailsafeMode(true);
-            const storedUser = localStorage.getItem('current_user');
-            if (storedUser) setCurrentUser(JSON.parse(storedUser));
-        }
-    };
-
-    initAuth();
-  }, []);
-
   // [Helper] Handle Session User logic (used in Init and Login)
   const handleSessionUser = async (authUser: any) => {
       setIsFailsafeMode(false);
@@ -193,12 +167,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
   };
 
+  // [Init] Check Session on Mount
+  useEffect(() => {
+    const initAuth = async () => {
+        let cloudSessionFound = false;
+
+        // 1. Try Cloud Session FIRST
+        if (isSupabaseConfigured) {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    // Session exists, restore cloud mode
+                    await handleSessionUser(session.user);
+                    cloudSessionFound = true;
+                    // If we found a valid cloud session, clear any stale emergency flags
+                    localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+                }
+            } catch (e) {
+                console.warn("[Auth] Cloud init check failed:", e);
+            }
+        }
+
+        // 2. Fallback to Emergency/Local ONLY if cloud failed
+        if (!cloudSessionFound) {
+            const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
+            if (emergencyAdmin) {
+                console.log("[Auth] No cloud session. Restoring Emergency Session.");
+                const adminUser = JSON.parse(emergencyAdmin);
+                setCurrentUser(adminUser);
+                setIsFailsafeMode(true);
+            } else if (!isSupabaseConfigured) {
+                setIsFailsafeMode(true);
+                const storedUser = localStorage.getItem('current_user');
+                if (storedUser) setCurrentUser(JSON.parse(storedUser));
+            }
+        }
+    };
+
+    initAuth();
+  }, []);
+
   // [Listener] Supabase Auth State Changes
   useEffect(() => {
       if (isFailsafeMode || !isSupabaseConfigured) return;
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) return; 
+          if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
+              // If emergency key exists, we might be in mixed state. 
+              // If we got a valid session event, clear emergency key to prefer cloud.
+              if (session?.user) localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+              else return; // Ignore sign-out events if in emergency mode
+          }
 
           if (event === 'SIGNED_OUT') {
               setCurrentUser(null);
@@ -270,6 +289,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 
                 setIsFailsafeMode(false);
                 setLoginModalOpen(false);
+                // CRITICAL: Clear emergency key on successful cloud login to break the loop
                 localStorage.removeItem(EMERGENCY_ADMIN_KEY); 
                 return { success: true, messageKey: 'loginSuccess' };
             }
@@ -362,6 +382,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (!loginError && loginData.user) {
               await handleSessionUser(loginData.user);
               setLoginModalOpen(false);
+              localStorage.removeItem(EMERGENCY_ADMIN_KEY); // Clear emergency key on recovery
               return { success: true, messageKey: 'loginSuccess' };
           }
           
