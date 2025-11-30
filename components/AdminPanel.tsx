@@ -19,7 +19,7 @@ import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 
 export const AdminPanel: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, isFailsafeMode } = useContext(AuthContext);
+  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, isFailsafeMode, forceReconnect } = useContext(AuthContext);
   const { t, settings, saveSettings } = useContext(SettingsContext);
   const [isEditing, setIsEditing] = useState<User | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -355,9 +355,15 @@ export const AdminPanel: React.FC = () => {
                         {isFailsafeMode && (
                             <div className="mt-2 text-xs bg-red-100 text-red-800 p-2 rounded border border-red-300">
                                 <strong>⚠️ 警告：離線管理模式</strong>
-                                <p className="mt-1">
+                                <p className="mt-1 mb-2">
                                     資料庫連線失敗。您目前使用的是緊急備用管理員帳號，無法讀寫真實資料庫。請檢查網路或 Supabase 設定。
                                 </p>
+                                <button 
+                                    onClick={forceReconnect}
+                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center justify-center gap-1"
+                                >
+                                    <ArrowPathIcon className="h-3 w-3" /> 強制重連 (清除緩存)
+                                </button>
                             </div>
                         )}
                     </div>
