@@ -1,7 +1,7 @@
 
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import type { User } from '../types';
-import { INITIAL_USERS } from '../services/localDatabase';
+import React, { createContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import type { User, UserRole } from '../types';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -12,6 +12,7 @@ interface AuthContextType {
   addUser: (user: User) => Promise<{ success: boolean; messageKey: string }>;
   updateUser: (email: string, data: Partial<User>) => Promise<{ success: boolean; messageKey: string }>;
   deleteUser: (email: string) => Promise<{ success: boolean; messageKey: string }>;
+  refreshUsers: () => Promise<void>;
   isLoginModalOpen: boolean;
   setLoginModalOpen: (isOpen: boolean) => void;
   isAdminPanelOpen: boolean;
@@ -20,158 +21,350 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType>(null!);
 
-const STORAGE_KEY_USERS = 'app_users_db_v1';
-const STORAGE_KEY_CURRENT_USER = 'app_current_session_v1';
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
+  
+  const justRegistered = useRef(false);
 
-  // --- 初始化：從 LocalStorage 讀取，若無則寫入內建資料庫 ---
-  useEffect(() => {
-    const initDatabase = () => {
+  // --- Local Storage Helpers (Fallback for when Supabase is NOT configured) ---
+  const getLocalUsers = (): User[] => {
+    try {
+      const stored = localStorage.getItem('app_users');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  };
+
+  const saveLocalUsers = (newUsers: User[]) => {
+    localStorage.setItem('app_users', JSON.stringify(newUsers));
+    setUsers(newUsers);
+  };
+  // -----------------------------
+
+  // 使用 useCallback 確保 fetchUsers 可以被依賴引用
+  const fetchUsers = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+        setUsers(getLocalUsers());
+        return;
+    }
+    try {
+      // 這裡不使用 timeout 避免不必要的報錯，Supabase client 內部會有處理
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      if (data) {
+        const profiles = data as any[];
+        const mappedUsers: User[] = profiles.map(p => ({
+          email: p.email || '',
+          role: (p.role || '一般用戶') as UserRole,
+          name: p.name || undefined, 
+          phone: p.phone || undefined,
+          subscriptionExpiry: p.subscription_expiry || undefined
+        }));
+        setUsers(mappedUsers);
+      }
+    } catch (error: any) {
+      console.warn("fetchUsers warning:", error.message);
+    }
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
       try {
-        // 1. 載入使用者資料庫
-        const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
-        let loadedUsers: User[] = [];
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        return data;
+      } catch { return null; }
+  };
 
-        if (storedUsers) {
-          loadedUsers = JSON.parse(storedUsers);
-        } else {
-          // 如果是第一次執行，寫入預設資料 (Embedded Database)
-          loadedUsers = [...INITIAL_USERS];
-          localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(loadedUsers));
-        }
-        setUsers(loadedUsers);
+  // 監聽 Supabase Realtime 變更 (即時更新後台列表)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
 
-        // 2. 恢復登入狀態 (Session)
-        const storedSession = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
-        if (storedSession) {
-          const sessionUser = JSON.parse(storedSession);
-          // 確保 Session 中的使用者資料是最新的 (從 users 陣列中查找)
-          const latestUser = loadedUsers.find(u => u.email === sessionUser.email);
-          if (latestUser) {
-            setCurrentUser(latestUser);
+    // 訂閱 profiles 資料表的變更 (新增、修改、刪除)
+    const channel = supabase
+      .channel('public:profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        console.log('Realtime update detected:', payload);
+        fetchUsers(); // 資料庫變動時，重新抓取列表
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchUsers]);
+
+  // 初始化 Session
+  useEffect(() => {
+    const initSession = async () => {
+      if (!isSupabaseConfigured) {
+          const storedUser = localStorage.getItem('app_current_user');
+          if (storedUser) setCurrentUser(JSON.parse(storedUser));
+          fetchUsers();
+          return;
+      }
+
+      try {
+        // [防死鎖] 縮短初始化超時時間
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Init timeout')), 2000));
+        
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id);
+          if (profile) {
+            const p = profile as any;
+            setCurrentUser({
+              email: p.email || '',
+              role: (p.role || '一般用戶') as UserRole,
+              name: p.name || undefined,
+              phone: p.phone || undefined,
+              subscriptionExpiry: p.subscription_expiry || undefined
+            });
           } else {
-            // 如果使用者已被刪除，清除 Session
-            localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+              const isAdmin = session.user.email === 'admin@mazylab.com';
+              setCurrentUser({
+                  email: session.user.email || '',
+                  role: isAdmin ? '管理員' : '一般用戶'
+              });
           }
         }
       } catch (e) {
-        console.error("Local database init failed:", e);
-        // 發生嚴重錯誤時，強制重置為預設值
-        setUsers(INITIAL_USERS);
+        console.warn("Session init warning (Supabase might be slow/down):", e);
       }
+      fetchUsers();
     };
 
-    initDatabase();
-  }, []);
+    initSession();
 
-  // --- 輔助函式：儲存到 LocalStorage ---
-  const saveUsersToStorage = (newUsers: User[]) => {
-    setUsers(newUsers);
-    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(newUsers));
-  };
+    if (isSupabaseConfigured) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (justRegistered.current && event === 'SIGNED_IN') return;
+
+          if (session?.user) {
+             if (event === 'SIGNED_IN') await new Promise(r => setTimeout(r, 500));
+             
+             const profile = await fetchProfile(session.user.id);
+             if (profile) {
+                const p = profile as any;
+                setCurrentUser({
+                  email: p.email || '',
+                  role: (p.role || '一般用戶') as UserRole,
+                  name: p.name || undefined,
+                  phone: p.phone || undefined,
+                  subscriptionExpiry: p.subscription_expiry || undefined
+                });
+             } else {
+                const isAdmin = session.user.email === 'admin@mazylab.com';
+                setCurrentUser({
+                    email: session.user.email || '',
+                    role: isAdmin ? '管理員' : '一般用戶'
+                });
+             }
+             fetchUsers();
+          } else if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+            setUsers([]);
+          }
+        });
+        return () => subscription.unsubscribe();
+    }
+  }, [fetchUsers]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
-    // 模擬網路延遲 (可選，讓使用者感覺有在運作)
-    await new Promise(resolve => setTimeout(resolve, 300));
+    console.log("Login attempt:", email); 
 
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(user));
-      setLoginModalOpen(false);
-      return { success: true };
-    }
-
-    // 特殊後門：如果資料庫壞了，允許 admin/admin 強制登入並修復
-    if (email === 'admin@mazylab.com' && password === 'admin') {
-        const rescueAdmin = INITIAL_USERS[0];
-        // 檢查是否已存在，不存在則加回去
-        if (!users.some(u => u.email === rescueAdmin.email)) {
-            const newUsers = [rescueAdmin, ...users];
-            saveUsersToStorage(newUsers);
-            setCurrentUser(rescueAdmin);
-            localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(rescueAdmin));
-            setLoginModalOpen(false);
-            return { success: true, message: '管理員帳號已自動修復並登入' };
+    if (!isSupabaseConfigured) {
+        const localUsers = getLocalUsers();
+        const user = localUsers.find(u => u.email === email && u.password === password);
+        if (!user && localUsers.length === 0 && email === 'admin@mazylab.com' && password === 'admin123') {
+             const adminUser: User = { email, password, role: '管理員', name: 'Admin' };
+             saveLocalUsers([adminUser]);
+             setCurrentUser(adminUser);
+             localStorage.setItem('app_current_user', JSON.stringify(adminUser));
+             setLoginModalOpen(false);
+             return { success: true };
         }
+        if (user) {
+            setCurrentUser(user);
+            localStorage.setItem('app_current_user', JSON.stringify(user));
+            setLoginModalOpen(false);
+            return { success: true };
+        }
+        return { success: false, message: '電子郵件或密碼錯誤 (本地模式)' };
     }
 
-    return { success: false, message: '電子郵件或密碼錯誤' };
+    // Supabase 模式優化
+    try {
+      // [優化] 移除不必要的 Promise.race 競爭，直接呼叫，避免 race condition 導致的未定義行為
+      // 也不要在登入前強制 signOut，這可能會導致狀態混亂
+      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) throw error;
+
+      console.log("Supabase login successful");
+      setLoginModalOpen(false);
+      
+      // 登入成功後再異步觸發 user 列表更新，不要 await 它以免卡住 UI
+      fetchUsers(); 
+      
+      return { success: true };
+
+    } catch (error: any) {
+      console.error("Login exception:", error);
+      let msg = error.message || String(error);
+      
+      if (msg.includes('Invalid API key')) msg = '系統設定錯誤：Supabase API Key 無效。';
+      else if (msg.includes('Invalid login credentials')) msg = '帳號或密碼錯誤';
+      else if (msg.includes('Email not confirmed')) msg = '您的 Email 尚未驗證。';
+      else if (msg.includes('Failed to fetch')) msg = '無法連接至伺服器，請檢查您的網路連線。';
+      
+      return { success: false, message: msg };
+    }
   };
 
   const logout = async () => {
     setCurrentUser(null);
     setAdminPanelOpen(false);
-    localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+    localStorage.removeItem('app_current_user');
+    if (isSupabaseConfigured) {
+        supabase.auth.signOut().catch(console.error);
+    }
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<{ success: boolean; messageKey: string; errorDetail?: string }> => {
-    await new Promise(resolve => setTimeout(resolve, 500)); // 模擬
+    if (!details.name.trim() || !details.phone.trim()) return { success: false, messageKey: 'missingRequiredFields' };
 
-    if (users.some(u => u.email.toLowerCase() === details.email.toLowerCase())) {
-      return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' };
+    if (!isSupabaseConfigured) {
+        const localUsers = getLocalUsers();
+        if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' };
+        const isFirstUser = localUsers.length === 0;
+        const newUser: User = { ...details, role: isFirstUser ? '管理員' : '一般用戶' };
+        saveLocalUsers([...localUsers, newUser]);
+        return { success: true, messageKey: 'registrationSuccess' };
     }
 
-    const newUser: User = { 
-        ...details, 
-        role: users.length === 0 ? '管理員' : '一般用戶' // 如果是第一個用戶，自動變管理員
-    };
-    
-    const newUsers = [...users, newUser];
-    saveUsersToStorage(newUsers);
-    
-    return { success: true, messageKey: 'registrationSuccess' };
+    try {
+      justRegistered.current = true; 
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: details.email,
+        password: details.password,
+        options: { data: { name: details.name, phone: details.phone } }
+      });
+
+      if (signUpError) {
+        justRegistered.current = false;
+        if (signUpError.message.includes('already registered')) return { success: false, messageKey: 'registrationFailed', errorDetail: 'Email already exists' }; 
+        throw signUpError;
+      }
+
+      if (data.user) {
+        if (data.session) supabase.auth.signOut().catch(console.error);
+        justRegistered.current = false; 
+        
+        // 註冊成功後，嘗試手動觸發一次 fetchUsers (雖然 Realtime 應該會捕捉到)
+        fetchUsers();
+        
+        return { success: true, messageKey: 'registrationSuccess' };
+      }
+      justRegistered.current = false;
+      return { success: false, messageKey: 'registrationFailed', errorDetail: 'Unknown error' };
+    } catch (error: any) {
+      justRegistered.current = false;
+      return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
+    }
   };
 
   const addUser = async (user: User): Promise<{ success: boolean; messageKey: string }> => {
-    if (users.some(u => u.email.toLowerCase() === user.email.toLowerCase())) {
-        return { success: false, messageKey: 'registrationFailed' }; 
+    if (!isSupabaseConfigured) {
+        const localUsers = getLocalUsers();
+        if (localUsers.some(u => u.email === user.email)) return { success: false, messageKey: 'registrationFailed' }; 
+        saveLocalUsers([...localUsers, user]);
+        return { success: true, messageKey: 'addUserSuccess' };
     }
-    const newUsers = [...users, user];
-    saveUsersToStorage(newUsers);
-    return { success: true, messageKey: 'addUserSuccess' };
+    return { success: false, messageKey: 'registrationFailed' }; 
   };
 
   const updateUser = async (email: string, data: Partial<User>): Promise<{ success: boolean; messageKey: string }> => {
-    const idx = users.findIndex(u => u.email === email);
-    if (idx === -1) return { success: false, messageKey: 'userNotFound' };
-
-    const updatedUser = { ...users[idx], ...data };
-    // 移除 undefined 的欄位
-    Object.keys(updatedUser).forEach(key => (updatedUser as any)[key] === undefined && delete (updatedUser as any)[key]);
-
-    const newUsers = [...users];
-    newUsers[idx] = updatedUser;
-    
-    saveUsersToStorage(newUsers);
-
-    // 如果更新的是當前登入者，同步更新 Session
-    if (currentUser?.email === email) {
-        setCurrentUser(updatedUser);
-        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(updatedUser));
+    if (!isSupabaseConfigured) {
+        const localUsers = getLocalUsers();
+        const idx = localUsers.findIndex(u => u.email === email);
+        if (idx === -1) return { success: false, messageKey: 'userNotFound' };
+        localUsers[idx] = { ...localUsers[idx], ...data };
+        saveLocalUsers(localUsers);
+        if (currentUser?.email === email) {
+            setCurrentUser(localUsers[idx]);
+            localStorage.setItem('app_current_user', JSON.stringify(localUsers[idx]));
+        }
+        return { success: true, messageKey: 'updateUserSuccess' };
     }
 
-    return { success: true, messageKey: 'updateUserSuccess' };
+    try {
+      const { data: profileData } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+      if (!profileData) {
+          return { success: false, messageKey: 'userNotFound' };
+      }
+
+      const updates: any = {};
+      if (data.name) updates.name = data.name;
+      if (data.phone) updates.phone = data.phone;
+      if (data.role) updates.role = data.role;
+      if (data.subscriptionExpiry !== undefined) updates.subscription_expiry = data.subscriptionExpiry;
+
+      const { error } = await supabase.from('profiles').update(updates).eq('id', profileData.id);
+      if (error) throw error;
+
+      fetchUsers();
+      if (currentUser?.email === email) {
+          const { data: newP } = await supabase.from('profiles').select('*').eq('id', profileData.id).single();
+          if (newP) {
+             const p = newP as any;
+             setCurrentUser({
+                email: p.email || '',
+                role: (p.role || '一般用戶') as UserRole,
+                name: p.name || undefined,
+                phone: p.phone || undefined,
+                subscriptionExpiry: p.subscription_expiry || undefined
+             });
+          }
+      }
+      return { success: true, messageKey: 'updateUserSuccess' };
+    } catch (error) {
+      console.error("Update failed:", error);
+      return { success: false, messageKey: 'updateUserSuccess' };
+    }
   };
 
   const deleteUser = async (email: string): Promise<{ success: boolean; messageKey: string }> => {
     if (currentUser?.email === email) return { success: false, messageKey: 'cannotDeleteSelf' };
-    
-    const newUsers = users.filter(u => u.email !== email);
-    if (newUsers.length === users.length) return { success: false, messageKey: 'userNotFound' };
-    
-    saveUsersToStorage(newUsers);
-    return { success: true, messageKey: 'deleteUserSuccess' };
+    if (!isSupabaseConfigured) {
+        const local = getLocalUsers();
+        const newU = local.filter(u => u.email !== email);
+        if (newU.length === local.length) return { success: false, messageKey: 'userNotFound' };
+        saveLocalUsers(newU);
+        return { success: true, messageKey: 'deleteUserSuccess' };
+    }
+    try {
+       const { data } = await supabase.from('profiles').select('id').eq('email', email).single();
+       if (!data) return { success: false, messageKey: 'userNotFound' };
+       const { error } = await supabase.from('profiles').delete().eq('id', data.id);
+       if (error) throw error;
+       fetchUsers();
+       return { success: true, messageKey: 'deleteUserSuccess' };
+    } catch { return { success: false, messageKey: 'userNotFound' }; }
+  };
+
+  // Expose fetchUsers for manual refresh if needed
+  const refreshUsers = async () => {
+      await fetchUsers();
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, users, login, logout, register, addUser, updateUser, deleteUser, isLoginModalOpen, setLoginModalOpen, isAdminPanelOpen, setAdminPanelOpen }}>
+    <AuthContext.Provider value={{ currentUser, users, login, logout, register, addUser, updateUser, deleteUser, refreshUsers, isLoginModalOpen, setLoginModalOpen, isAdminPanelOpen, setAdminPanelOpen }}>
       {children}
     </AuthContext.Provider>
   );

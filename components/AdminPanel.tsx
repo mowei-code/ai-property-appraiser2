@@ -14,11 +14,12 @@ import { EnvelopeIcon } from './icons/EnvelopeIcon';
 import { sendEmail } from '../services/emailService';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
-import { CheckCircleIcon } from './icons/CheckCircleIcon'; // Added Icon
-import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; // Added Icon
+import { CheckCircleIcon } from './icons/CheckCircleIcon'; 
+import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; 
+import { ArrowPathIcon } from './icons/ArrowPathIcon'; // Added Icon
 
 export const AdminPanel: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, setAdminPanelOpen, currentUser } = useContext(AuthContext);
+  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser } = useContext(AuthContext);
   const { t, settings, saveSettings } = useContext(SettingsContext);
   const [isEditing, setIsEditing] = useState<User | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -33,6 +34,7 @@ export const AdminPanel: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [importStatus, setImportStatus] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   
@@ -77,6 +79,12 @@ export const AdminPanel: React.FC = () => {
     setPhone('');
     setError('');
     setSuccess('');
+  };
+
+  const handleRefreshUsers = async () => {
+      setIsRefreshing(true);
+      await refreshUsers();
+      setTimeout(() => setIsRefreshing(false), 500);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -347,7 +355,17 @@ export const AdminPanel: React.FC = () => {
           </div>
           <div className="flex-grow p-6 overflow-y-auto bg-white dark:bg-gray-900">
              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold">{t('userList')}</h3>
+                <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold">{t('userList')}</h3>
+                    <button 
+                        onClick={handleRefreshUsers}
+                        disabled={isRefreshing}
+                        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
+                        title="重新整理列表"
+                    >
+                        <ArrowPathIcon className={`h-5 w-5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+                    </button>
+                </div>
                 <div className="flex gap-3"><button onClick={handleExportCsv} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">{t('exportCsv')}</button><button onClick={handleAddNew} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">+ {t('addUser')}</button></div>
             </div>
             <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">Name</th><th className="p-4 text-sm">Role</th><th className="p-4 text-sm">Expiry</th><th className="p-4 text-sm text-right">Action</th></tr></thead><tbody>{users.map(u=>(<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry?new Date(u.subscriptionExpiry).toLocaleDateString():'-'}</td><td className="p-4 text-right"><button onClick={()=>handleEdit(u)} className="text-blue-600 mr-2">Edit</button><button onClick={()=>initiateDelete(u.email)} className="text-red-600">Del</button></td></tr>))}</tbody></table></div>
