@@ -224,13 +224,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 2. Real Supabase Login (Cloud Mode)
     try {
-        const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
-            setTimeout(() => reject(new Error("連線逾時，請檢查網路狀況。")), 8000)
-        );
-
-        const loginPromise = supabase.auth.signInWithPassword({ email, password: pass });
-
-        const { error } = await Promise.race([loginPromise, timeoutPromise]) as any;
+        // REMOVED Promise.race timeout. Let Supabase handle connection time.
+        // This prevents the "Timeout" error on cold starts.
+        const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
 
         if (error) {
             return { success: false, messageKey: 'loginFailed', message: error.message };
@@ -288,16 +284,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       justRegistered.current = true; 
       
-      const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
-            setTimeout(() => reject(new Error("Connection timed out.")), 8000)
-      );
-      const signUpPromise = supabase.auth.signUp({
+      // Removed Timeout
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: details.email,
         password: details.password,
         options: { data: { name: details.name, phone: details.phone } }
       });
-
-      const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]) as any;
 
       if (signUpError) throw signUpError;
 
