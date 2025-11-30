@@ -110,7 +110,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             }));
             
-            if (currentUser && !mappedUsers.find(u => u.email === currentUser.email) && currentUser.id !== 'local_admin_emergency') {
+            // Merge current emergency admin into list visually if missing
+            if (currentUser && !mappedUsers.find(u => u.email === currentUser.email) && currentUser.id === 'local_admin_emergency') {
                 mappedUsers.unshift(currentUser);
             }
 
@@ -130,13 +131,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const initAuth = async () => {
-        // 1. Check for Emergency Admin Session first (Higher priority)
+        // 1. Check for Emergency Admin Session first (Highest priority)
         const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
         if (emergencyAdmin) {
+            console.log("[AuthContext] Restoring Emergency Admin Session");
             const adminUser = JSON.parse(emergencyAdmin);
             setCurrentUser(adminUser);
-            // Even if we are emergency admin, try to fetch users list if possible
-            if (isSupabaseConfigured) fetchUsers();
+            if (isSupabaseConfigured) fetchUsers().catch(() => {});
             return;
         }
 
@@ -175,14 +176,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            // [CRITICAL GUARD] 
+            // If user is in Emergency Admin mode, IGNORE Supabase events.
+            // This prevents Supabase from "refreshing" and overwriting the admin session with a null or error state.
+            if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
+                console.log("[AuthContext] Ignoring Supabase event due to active Emergency Session:", event);
+                return;
+            }
+
             if (event === 'SIGNED_OUT') {
-                // Only clear if not in emergency mode (handled by explicit logout)
-                if (!localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
-                    setCurrentUser(null);
-                    setUsers([]);
-                }
+                setCurrentUser(null);
+                setUsers([]);
             } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-                 localStorage.removeItem(EMERGENCY_ADMIN_KEY); // Clear emergency flag on real login
                  await ensureProfileExists(session.user);
 
                  const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -223,13 +228,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [currentUser, fetchUsers]);
 
   const login = async (emailInput: string, passInput: string): Promise<AuthResult> => {
-    // Clean inputs
     const email = emailInput.trim().toLowerCase();
     const pass = passInput.trim();
 
     // --- [Emergency Admin Backdoor] ---
     // Bypass EVERYTHING if these credentials match. 
-    // This allows entry even if Supabase triggers/schema are 100% broken.
     if (email === 'admin@mazylab.com' && pass === 'admin123') {
          console.log("Emergency Admin Login Activated");
          const adminUser: User = { 
@@ -239,13 +242,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              name: 'System Admin (Emergency)', 
              phone: '0900000000' 
          };
-         setCurrentUser(adminUser);
+         
+         // Clear any conflicting Supabase session aggressively
+         if (isSupabaseConfigured) {
+             supabase.auth.signOut().catch(() => {});
+         }
+
          localStorage.setItem(EMERGENCY_ADMIN_KEY, JSON.stringify(adminUser));
+         setCurrentUser(adminUser);
          setLoginModalOpen(false);
          
-         // Try to fetch users list for the admin panel, but don't block login if it fails
          if (isSupabaseConfigured) {
-             fetchUsers().catch(console.error);
+             fetchUsers().catch(() => {});
          }
          
          return { success: true, messageKey: 'loginSuccess' };
@@ -267,13 +275,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
-        // Helpful error override for the specific schema issue user is facing
-        if (error.message.includes('Database error querying schema') || error.message.includes('Database error')) {
+        // Intercept database errors and suggest backdoor
+        if (error.message.includes('Database error') || error.message.includes('schema')) {
             if (email === 'admin@mazylab.com') {
                 return { 
                     success: false, 
                     messageKey: 'loginFailed', 
-                    message: "資料庫結構異常。請使用緊急密碼 'admin123' 強制登入後台。" 
+                    message: "資料庫異常。請使用緊急密碼 'admin123' 強制登入。" 
                 };
             }
         }
@@ -285,21 +293,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    // Clear Emergency Admin Session
-    if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
-        localStorage.removeItem(EMERGENCY_ADMIN_KEY);
-        setCurrentUser(null);
-        setUsers([]);
-        return;
-    }
-
-    if (!isSupabaseConfigured) {
-        setCurrentUser(null);
-        localStorage.removeItem('current_user');
-        return;
-    }
-    await supabase.auth.signOut();
+    // 1. Synchronous State Clear (Instant UI Feedback)
     setCurrentUser(null);
+    setUsers([]);
+    setAdminPanelOpen(false);
+
+    // 2. Clear Persistence Keys
+    localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+    localStorage.removeItem('current_user');
+
+    // 3. Backend Cleanup (Fire and forget, don't block UI)
+    if (isSupabaseConfigured) {
+        supabase.auth.signOut().catch(err => console.warn("Supabase signout warning:", err));
+    }
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
@@ -370,10 +376,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
-      // Local User Logic
+      // Local User Logic or Emergency Mode
       if (!isSupabaseConfigured || currentUser?.id === 'local_admin_emergency') {
-          // If in emergency mode, we can't really update supabase users easily via client API if we are not authenticated properly against supabase.
-          // But if we are simulating edits on the fetched list...
+          // Allow UI updates in emergency mode even if DB fails, to let admin test UI
           if (!isSupabaseConfigured) {
               const localUsers = getLocalUsers();
               const idx = localUsers.findIndex(u => u.email === email);
