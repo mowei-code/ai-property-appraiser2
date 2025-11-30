@@ -105,8 +105,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
 
             setUsers(mappedUsers);
-            // DO NOT rely on local storage when in cloud mode.
-            // We intentionally do not write to LOCAL_USERS_KEY here to avoid confusion.
+            localStorage.removeItem(LOCAL_USERS_KEY);
         }
     } catch (e) {
         console.error("[Auth] Fetch exception:", e);
@@ -172,30 +171,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // [Init] Check Session on Mount
   useEffect(() => {
     const initAuth = async () => {
-        // [FORCE CLEANUP] Always remove emergency key on boot if Supabase is configured.
-        // This forces the app to TRY cloud connection instead of defaulting to offline.
-        if (isSupabaseConfigured) {
-            localStorage.removeItem(EMERGENCY_ADMIN_KEY);
-        }
+        let cloudSessionFound = false;
 
-        // 1. Try Cloud Session
+        // 1. Try Cloud Session FIRST
         if (isSupabaseConfigured) {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
+                    // Session exists, restore cloud mode
                     await handleSessionUser(session.user);
-                    return; // Cloud session active, we are done.
+                    cloudSessionFound = true;
+                    // If we found a valid cloud session, clear any stale emergency flags
+                    localStorage.removeItem(EMERGENCY_ADMIN_KEY);
                 }
             } catch (e) {
                 console.warn("[Auth] Cloud init check failed:", e);
             }
         }
 
-        // 2. Fallback check (Only if cloud check didn't return)
-        // If we are here, it means no cloud session. Check if we *should* be in emergency mode (e.g. forced by user later)
-        // But on init, we default to "Logged Out" if cloud fails, rather than "Emergency Admin".
-        // This prevents the "Stuck in Offline" loop.
-        setIsFailsafeMode(false);
+        // 2. Fallback to Emergency/Local ONLY if cloud failed
+        if (!cloudSessionFound) {
+            const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
+            if (emergencyAdmin) {
+                console.log("[Auth] No cloud session. Restoring Emergency Session.");
+                const adminUser = JSON.parse(emergencyAdmin);
+                setCurrentUser(adminUser);
+                setIsFailsafeMode(true);
+            } else if (!isSupabaseConfigured) {
+                setIsFailsafeMode(true);
+                const storedUser = localStorage.getItem('current_user');
+                if (storedUser) setCurrentUser(JSON.parse(storedUser));
+            } else {
+                // Supabase is configured but no session -> Ensure we are NOT in failsafe mode to allow normal login
+                setIsFailsafeMode(false);
+            }
+        }
     };
 
     initAuth();
@@ -206,6 +216,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (isFailsafeMode || !isSupabaseConfigured) return;
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
+              if (session?.user) localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+              else return; 
+          }
+
           if (event === 'SIGNED_OUT') {
               setCurrentUser(null);
               setUsers([]);
@@ -229,12 +244,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // --- Actions ---
 
-  const forceReconnect = () => {
-      localStorage.removeItem(EMERGENCY_ADMIN_KEY);
-      localStorage.removeItem(LOCAL_USERS_KEY); // Also clear stale user list
-      window.location.reload();
-  };
-
   const activateEmergencyAdmin = () => {
       console.warn("⚠️ Activating Emergency Admin Mode.");
       const adminUser: User = {
@@ -253,6 +262,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true, messageKey: 'loginSuccess', message: '已啟用緊急管理員模式' };
   };
 
+  const forceReconnect = async () => {
+      console.log("[Auth] Forcing reconnect and clearing session...");
+      localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+      localStorage.removeItem(LOCAL_USERS_KEY);
+      localStorage.removeItem('current_user');
+      
+      if (isSupabaseConfigured) {
+          try {
+              await supabase.auth.signOut();
+          } catch (e) {
+              console.warn("SignOut error during force reconnect:", e);
+          }
+      }
+      window.location.reload();
+  };
+
   const login = async (emailInput: string, passInput: string): Promise<AuthResult> => {
     const email = emailInput.trim().toLowerCase();
     const pass = passInput.trim();
@@ -267,17 +292,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (error) {
                 console.error("Supabase login error:", error.message);
-                // Only allow emergency bypass if specifically requested via retry or explicit action
-                // But for now, we return error to prevent accidental offline mode
-                if (isSystemAdmin && isEmergencyPass) {
-                     return activateEmergencyAdmin();
+                
+                // CRITICAL FIX: Only enter emergency mode on NETWORK errors, NOT on "Invalid login credentials".
+                // If credentials are invalid, it means the user might be deleted from Auth, so we want them to Register.
+                const isCredentialError = error.message.includes('Invalid login credentials');
+                
+                if (isSystemAdmin && isEmergencyPass && !isCredentialError) {
+                    return activateEmergencyAdmin();
                 }
                 return { success: false, messageKey: 'loginFailed', message: error.message };
             }
 
             if (data.user) {
-                // Login successful on Supabase side
-                // Trigger Self-Healing Logic in handleSessionUser
                 await handleSessionUser(data.user);
                 
                 setIsFailsafeMode(false);
@@ -292,7 +318,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }
 
-    // 2. Local Mode (Only if SUPABASE IS NOT CONFIGURED)
+    // 2. Local Mode
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === pass);
@@ -315,8 +341,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsFailsafeMode(false);
     localStorage.removeItem(EMERGENCY_ADMIN_KEY);
     localStorage.removeItem('current_user');
-    // NOTE: We do NOT remove LOCAL_USERS_KEY here to preserve data for offline mode if needed,
-    // but in this specific fix we want to be clean.
     
     if (isSupabaseConfigured) {
         try {
@@ -338,11 +362,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const isEmergencyPass = details.password === 'admin123';
 
     // Emergency Bypass for Admin Registration
-    // If admin tries to register, we try to log them in first (Self-Healing)
     if (isSystemAdmin && isSupabaseConfigured) {
-        const loginResult = await login(details.email, details.password);
-        if (loginResult.success) {
-            return { success: true, messageKey: 'loginSuccess', message: '帳號已存在，已為您自動登入並修復資料。' };
+        // Try login first to see if user exists
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+            email: details.email,
+            password: details.password
+        });
+        
+        if (!loginError && loginData.user) {
+             await handleSessionUser(loginData.user);
+             setLoginModalOpen(false);
+             return { success: true, messageKey: 'loginSuccess', message: '帳號已存在，已為您自動登入並修復資料。' };
         }
     }
 
@@ -375,10 +405,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (!loginError && loginData.user) {
               await handleSessionUser(loginData.user);
               setLoginModalOpen(false);
-              localStorage.removeItem(EMERGENCY_ADMIN_KEY); // Clear emergency key on recovery
+              localStorage.removeItem(EMERGENCY_ADMIN_KEY); 
               return { success: true, messageKey: 'loginSuccess' };
           }
           
+          // Only force emergency if it's NOT a "User already registered" error (which implies we should login)
+          // But here if signUpError exists AND login failed, it's a real issue.
           if (isSystemAdmin && isEmergencyPass) {
               return activateEmergencyAdmin();
           }
