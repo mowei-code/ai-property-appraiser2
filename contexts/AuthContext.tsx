@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
   
-  // Failsafe Mode = TRUE means we are using "admin123" or offline mode. 
+  // Failsafe Mode = TRUE means we are using "admin123" offline mode. 
   const [isFailsafeMode, setIsFailsafeMode] = useState(false);
   
   const justRegistered = useRef(false);
@@ -90,7 +90,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (error) {
             console.error("[Auth] Supabase fetch error:", error.message);
-            // CRITICAL: Do not fallback to local storage on error in cloud mode to avoid phantom state
             return;
         }
 
@@ -104,10 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
 
-            // STRICT SOURCE OF TRUTH: Update state directly from DB
             setUsers(mappedUsers);
-            
-            // Clean local storage cache to prevent phantom users if we ever fall back
             localStorage.removeItem(LOCAL_USERS_KEY);
         }
     } catch (e) {
@@ -118,46 +114,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // [Init] Check Session on Mount
   useEffect(() => {
     const initAuth = async () => {
-        // 1. Check Emergency Session FIRST
         const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
         if (emergencyAdmin) {
-            console.log("[Auth] Restoring Emergency Session");
             const adminUser = JSON.parse(emergencyAdmin);
             setCurrentUser(adminUser);
             setIsFailsafeMode(true);
             return; 
         }
 
-        // 2. Check Supabase Session
         if (isSupabaseConfigured) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                setIsFailsafeMode(false);
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-                
-                // [INVINCIBLE ADMIN CHECK]
-                // Even if profile is missing or DB error, if email matches system admin, grant access.
-                if (session.user.email === SYSTEM_ADMIN_EMAIL) {
-                    setCurrentUser({
-                        id: session.user.id,
-                        email: session.user.email!,
-                        role: '管理員', // FORCE ADMIN ROLE
-                        name: profile?.name || 'System Admin',
-                        phone: profile?.phone || '',
-                        subscriptionExpiry: profile?.subscription_expiry
-                    });
-                } else if (profile) {
-                    setCurrentUser({
-                        id: profile.id, email: profile.email, role: profile.role,
-                        name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
-                    });
-                } else {
-                    // Fallback if profile missing (shouldn't happen often)
-                    setCurrentUser({ id: session.user.id, email: session.user.email!, role: '一般用戶' });
-                }
+                await handleSessionUser(session.user);
             }
         } else {
-            // No Supabase Config -> Force Local Mode
             setIsFailsafeMode(true);
             const storedUser = localStorage.getItem('current_user');
             if (storedUser) setCurrentUser(JSON.parse(storedUser));
@@ -166,6 +136,62 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     initAuth();
   }, []);
+
+  // [Helper] Handle Session User logic (used in Init and Login)
+  const handleSessionUser = async (authUser: any) => {
+      setIsFailsafeMode(false);
+      let profile: any = null;
+      const isSystemAdmin = authUser.email === SYSTEM_ADMIN_EMAIL;
+
+      try {
+          const { data } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+          profile = data;
+      } catch (e) {
+          console.error("Profile fetch error:", e);
+      }
+
+      // [SELF-HEALING] If Admin exists in Auth but not DB (Profile deleted), Resurrection time!
+      if (!profile && isSystemAdmin) {
+          console.warn("[Auth] Admin profile missing! Attempting self-healing...");
+          const recoveryProfile = {
+              id: authUser.id,
+              email: authUser.email!,
+              name: 'System Admin',
+              phone: '0900000000',
+              role: '管理員',
+              updated_at: new Date().toISOString(),
+          };
+          
+          // Force Insert
+          const { error: insertError } = await supabase.from('profiles').upsert([recoveryProfile]);
+          
+          if (!insertError) {
+              console.log("[Auth] Admin profile resurrected successfully.");
+              profile = recoveryProfile;
+          } else {
+              console.error("[Auth] Resurrection failed:", insertError);
+          }
+      }
+
+      if (isSystemAdmin) {
+          // Force local state to be Admin regardless of DB content to prevent lockout
+          setCurrentUser({
+              id: authUser.id,
+              email: authUser.email!,
+              role: '管理員', 
+              name: profile?.name || 'System Admin',
+              phone: profile?.phone || '',
+              subscriptionExpiry: profile?.subscription_expiry
+          });
+      } else if (profile) {
+          setCurrentUser({
+              id: profile.id, email: profile.email, role: profile.role,
+              name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
+          });
+      } else {
+          setCurrentUser({ id: authUser.id, email: authUser.email!, role: '一般用戶' });
+      }
+  };
 
   // [Listener] Supabase Auth State Changes
   useEffect(() => {
@@ -178,60 +204,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               setCurrentUser(null);
               setUsers([]);
           } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-               let profile: any = null;
-               try {
-                   const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-                   profile = data;
-               } catch (e) {
-                   console.error("Profile fetch error in listener (ignoring for Admin):", e);
-               }
-               
-               const isSystemAdmin = session.user.email === SYSTEM_ADMIN_EMAIL;
-
-               // [RECOVERY] If profile is missing (e.g. deleted from profiles table but exists in Auth), recreate it.
-               if (!profile) {
-                   console.log("Profile missing for logged in user. Attempting to recreate...");
-                   const newProfile = {
-                       id: session.user.id,
-                       email: session.user.email!,
-                       name: session.user.user_metadata?.name || (isSystemAdmin ? 'System Admin' : 'User'),
-                       phone: session.user.user_metadata?.phone || '',
-                       role: isSystemAdmin ? '管理員' : '一般用戶',
-                       updated_at: new Date().toISOString(),
-                   };
-                   
-                   // Try insert, but don't block login if it fails (e.g. RLS error)
-                   const { error: insertError } = await supabase.from('profiles').insert([newProfile]);
-                   if (!insertError) {
-                       profile = newProfile; 
-                   } else {
-                       console.error("Failed to recreate profile:", insertError);
-                   }
-               }
-
-               // [INVINCIBLE ADMIN] Force role in local state regardless of DB
-               if (isSystemAdmin) {
-                   setCurrentUser({
-                       id: session.user.id, 
-                       email: session.user.email!, 
-                       role: '管理員', // FORCE ADMIN
-                       name: profile?.name || 'System Admin',
-                       phone: profile?.phone || '',
-                       subscriptionExpiry: profile?.subscription_expiry
-                   });
-               } else if (profile) {
-                   setCurrentUser({
-                       id: profile.id, email: profile.email, role: profile.role,
-                       name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
-                   });
-               } else {
-                   // Minimal fallback
-                   setCurrentUser({ 
-                       id: session.user.id, 
-                       email: session.user.email!, 
-                       role: '一般用戶' 
-                   });
-               }
+               await handleSessionUser(session.user);
                fetchUsers();
           }
       });
@@ -272,29 +245,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const email = emailInput.trim().toLowerCase();
     const pass = passInput.trim();
 
-    // Check for specific admin credentials to enable emergency bypass
     const isSystemAdmin = email === SYSTEM_ADMIN_EMAIL;
     const isEmergencyPass = pass === 'admin123';
 
-    // 1. Supabase Login (Standard Flow)
+    // 1. Supabase Login
     if (isSupabaseConfigured) {
         try {
             const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
 
             if (error) {
                 console.error("Supabase login error:", error.message);
-                
-                // [EMERGENCY BYPASS]
-                // If cloud login fails for the specific admin, force local entry.
+                // If it's the admin trying to get in, but Supabase blocks (e.g. rate limit, or weird state)
+                // Force Emergency Mode
                 if (isSystemAdmin && isEmergencyPass) {
                     return activateEmergencyAdmin();
                 }
-
                 return { success: false, messageKey: 'loginFailed', message: error.message };
             }
 
             if (data.user) {
-                // Success: Cloud Mode
+                // Login successful on Supabase side
+                // Trigger Self-Healing Logic in handleSessionUser
+                await handleSessionUser(data.user);
+                
                 setIsFailsafeMode(false);
                 setLoginModalOpen(false);
                 localStorage.removeItem(EMERGENCY_ADMIN_KEY); 
@@ -302,10 +275,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         } catch (e: any) {
             console.error("Login network exception:", e);
-            // [EMERGENCY BYPASS] Network Error Case
-            if (isSystemAdmin && isEmergencyPass) {
-                return activateEmergencyAdmin();
-            }
+            if (isSystemAdmin && isEmergencyPass) return activateEmergencyAdmin();
             return { success: false, messageKey: 'loginFailed', message: e.message || "Network Error" };
         }
     }
@@ -350,9 +320,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
     if (!details.name.trim() || !details.phone.trim()) return { success: false, messageKey: 'missingRequiredFields' };
 
-    // Check Emergency Bypass for Registration attempts too
     const isSystemAdmin = details.email.toLowerCase() === SYSTEM_ADMIN_EMAIL;
     const isEmergencyPass = details.password === 'admin123';
+
+    // Emergency Bypass for Admin Registration
+    // If admin tries to register, we try to log them in first (Self-Healing)
+    if (isSystemAdmin && isSupabaseConfigured) {
+        const loginResult = await login(details.email, details.password);
+        if (loginResult.success) {
+            return { success: true, messageKey: 'loginSuccess', message: '帳號已存在，已為您自動登入並修復資料。' };
+        }
+        // If login failed (e.g. wrong password), try registration
+    }
 
     if (isFailsafeMode || !isSupabaseConfigured) {
         const localUsers = getLocalUsers();
@@ -371,23 +350,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         options: { data: { name: details.name, phone: details.phone } }
       });
 
-      // [SMART RECOVERY & EMERGENCY BYPASS]
       if (signUpError) {
           console.log("Registration error:", signUpError.message);
           
-          // 1. Try normal fallback login
+          // Smart Recovery: User exists? Try login.
           const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
               email: details.email,
               password: details.password
           });
 
           if (!loginError && loginData.user) {
-              console.log("Fallback login successful. Closing modal.");
+              await handleSessionUser(loginData.user);
               setLoginModalOpen(false);
               return { success: true, messageKey: 'loginSuccess' };
           }
           
-          // 2. If fallback login also fails (e.g. wrong password or db error), AND it's the admin, FORCE ENTRY.
+          // Force Emergency Entry if it's the admin and everything else failed
           if (isSystemAdmin && isEmergencyPass) {
               return activateEmergencyAdmin();
           }
@@ -422,20 +400,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
       // Admin Add User Logic
       if (isFailsafeMode || !isSupabaseConfigured) {
-          // Local Add
           const localUsers = getLocalUsers();
-          if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' }; // User exists
+          if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' }; 
           const newUser: User = { ...details, id: `local_${Date.now()}` };
           saveLocalUsers([...localUsers, newUser]);
           return { success: true, messageKey: 'addUserSuccess' };
       }
-
-      // Cloud Add - We typically use `signUp` but that logs the admin out.
       return { success: false, messageKey: 'registrationFailed', message: '雲端模式下，請讓使用者自行註冊，或使用 Supabase Dashboard 新增。' };
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
-      // 1. OFFLINE / FAILSAFE MODE -> Local Update
       if (isFailsafeMode || !isSupabaseConfigured) {
           const currentUsers = getLocalUsers();
           const idx = currentUsers.findIndex(u => u.email === email);
@@ -448,9 +422,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { success: false, messageKey: 'userNotFound' };
       }
 
-      // 2. CLOUD MODE -> Database First (PESSIMISTIC UPDATE)
       try {
-          // Find real DB ID based on Email
           const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
           
           if (!targetUser) {
@@ -466,7 +438,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               dbUpdates.subscription_expiry = updates.subscriptionExpiry;
           }
 
-          // Attempt DB Update
           const { data: updatedData, error } = await supabase
               .from('profiles')
               .update(dbUpdates)
@@ -474,24 +445,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               .select();
           
           if (error) {
-              console.error("Supabase update error:", error);
-              return { 
-                  success: false, 
-                  messageKey: 'updateUserSuccess', 
-                  message: `資料庫更新失敗: ${error.message} (可能權限不足)` 
-              };
+              return { success: false, messageKey: 'updateUserSuccess', message: `資料庫更新失敗: ${error.message}` };
           }
 
           if (!updatedData || updatedData.length === 0) {
-               console.error("Supabase update returned no data (RLS blocking?)");
-               return { 
-                  success: false, 
-                  messageKey: 'updateUserSuccess', 
-                  message: "更新失敗：資料庫未回傳結果，您可能沒有權限修改此用戶 (RLS)。" 
-              };
+               return { success: false, messageKey: 'updateUserSuccess', message: "更新失敗：資料庫未回傳結果，可能權限不足。" };
           }
 
-          // ONLY update local state IF DB update was successful
           await fetchUsers();
           
           if (currentUser?.email === email) {
@@ -508,7 +468,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const deleteUser = async (email: string): Promise<AuthResult> => {
-      // 1. Local Delete
       if (isFailsafeMode || !isSupabaseConfigured) {
           const currentUsers = getLocalUsers().filter(u => u.email !== email);
           saveLocalUsers(currentUsers);
@@ -516,15 +475,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { success: true, messageKey: 'userDeleted', message: "已刪除本地資料 (離線模式)" };
       }
 
-      // 2. Cloud Delete
       try {
           const { error } = await supabase.from('profiles').delete().eq('email', email);
           if (error) {
               return { success: false, messageKey: 'userDeleted', message: `資料庫刪除失敗: ${error.message}` };
           }
-          
           await fetchUsers();
-          
           return { success: true, messageKey: 'userDeleted' };
       } catch (e: any) {
           return { success: false, messageKey: 'userDeleted', message: e.message };
