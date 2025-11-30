@@ -3,7 +3,7 @@ import React, { useState, useContext, useEffect, useRef } from 'react';
 import type { User, UserRole } from '../types';
 import { AuthContext } from '../contexts/AuthContext';
 import { SettingsContext } from '../contexts/SettingsContext';
-import { isSupabaseConfigured } from '../supabaseClient'; // Import connection status
+import { isSupabaseConfigured } from '../supabaseClient';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 import { parseMOICSV } from '../utils';
@@ -16,10 +16,10 @@ import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon'; 
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; 
-import { ArrowPathIcon } from './icons/ArrowPathIcon'; // Added Icon
+import { ArrowPathIcon } from './icons/ArrowPathIcon';
 
 export const AdminPanel: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser } = useContext(AuthContext);
+  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, isFailsafeMode } = useContext(AuthContext);
   const { t, settings, saveSettings } = useContext(SettingsContext);
   const [isEditing, setIsEditing] = useState<User | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -31,6 +31,7 @@ export const AdminPanel: React.FC = () => {
   const [role, setRole] = useState<UserRole>('一般用戶');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [expiryDate, setExpiryDate] = useState(''); // New state for manual expiry editing
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [importStatus, setImportStatus] = useState('');
@@ -50,6 +51,11 @@ export const AdminPanel: React.FC = () => {
 
   const roles: UserRole[] = ['管理員', '一般用戶', '付費用戶'];
 
+  // Force refresh on mount to clear phantom users
+  useEffect(() => {
+      handleRefreshUsers();
+  }, []);
+
   useEffect(() => {
     if (isEditing) {
       setEmail(isEditing.email);
@@ -57,6 +63,12 @@ export const AdminPanel: React.FC = () => {
       setRole(isEditing.role);
       setName(isEditing.name || '');
       setPhone(isEditing.phone || '');
+      // Format ISO date to YYYY-MM-DD for input type="date"
+      if (isEditing.subscriptionExpiry) {
+          setExpiryDate(new Date(isEditing.subscriptionExpiry).toISOString().split('T')[0]);
+      } else {
+          setExpiryDate('');
+      }
     }
   }, [isEditing]);
   
@@ -77,6 +89,7 @@ export const AdminPanel: React.FC = () => {
     setRole('一般用戶');
     setName('');
     setPhone('');
+    setExpiryDate('');
     setError('');
     setSuccess('');
   };
@@ -87,24 +100,49 @@ export const AdminPanel: React.FC = () => {
       setTimeout(() => setIsRefreshing(false), 500);
   };
 
+  const handleRoleChange = (newRole: UserRole) => {
+      setRole(newRole);
+      // Auto-populate expiry if switching to Paid User and no date is set
+      if (newRole === '付費用戶' && !expiryDate) {
+          const nextMonth = new Date();
+          nextMonth.setDate(nextMonth.getDate() + 30);
+          setExpiryDate(nextMonth.toISOString().split('T')[0]);
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     let result;
     if (isAdding) {
+      // For adding, we don't usually set expiry immediately unless logic changes, keeping it simple.
       result = await addUser({ email, password, role, name, phone });
     } else if (isEditing) {
       const updatedData: Partial<User> = { role, name, phone };
       if (password) updatedData.password = password;
+      
+      // Update Expiry Date Logic
+      if (expiryDate) {
+          updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
+      } else {
+          // If cleared, set to null (or empty string based on backend handling, let's assume null usually clears it)
+          // For Supabase timestamp, we send null to clear.
+          updatedData.subscriptionExpiry = null; 
+      }
+
       result = await updateUser(isEditing.email, updatedData);
     } else { return; }
 
     if (result.success) {
       setSuccess(t(result.messageKey));
       if(isAdding) resetForm();
+      // If editing, keep form open but refresh context
+      if(isEditing) {
+          await refreshUsers();
+      }
     } else {
-      setError(t(result.messageKey));
+      setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
     }
   };
   
@@ -134,14 +172,13 @@ export const AdminPanel: React.FC = () => {
       const subject = `[AI房產估價師] 帳號通知`;
       const text = `親愛的 ${isEditing.name || '會員'} 您好，\n\n您的帳號狀態已更新為：${isEditing.role}\n訂閱到期日：${isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry).toLocaleDateString() : '無'}\n\n--\nAI 房產估價師系統`;
       
-      // 使用統一的 emailService
       const result = await sendEmail({
           smtpHost: settings.smtpHost, 
           smtpPort: settings.smtpPort, 
           smtpUser: settings.smtpUser, 
           smtpPass: settings.smtpPass,
-          to: isEditing.email, // 主要收件人：會員
-          cc: settings.smtpUser, // 副本：管理員(自己)
+          to: isEditing.email, 
+          cc: settings.smtpUser, 
           subject, 
           text
       });
@@ -181,16 +218,26 @@ export const AdminPanel: React.FC = () => {
       if (!isEditing) return;
       const now = new Date();
       let newExpiryDate = now;
-      if (isEditing.subscriptionExpiry) {
-          const currentExpiry = new Date(isEditing.subscriptionExpiry);
-          if (currentExpiry > now) newExpiryDate = currentExpiry;
+      
+      // If manually edited date exists, base calculation on that, else check existing subscription
+      const baseDate = expiryDate ? new Date(expiryDate) : (isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry) : now);
+      
+      if (baseDate > now) {
+          newExpiryDate = new Date(baseDate);
       }
+      
       newExpiryDate.setDate(newExpiryDate.getDate() + days);
-      const result = await updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: newExpiryDate.toISOString() });
+      const isoDate = newExpiryDate.toISOString();
+
+      // Update backend
+      const result = await updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: isoDate });
+      
       if (result.success) {
           setSuccess(t('subscriptionExtended', { date: newExpiryDate.toLocaleDateString() }));
-          setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: newExpiryDate.toISOString() });
+          // Update local state immediately for UI responsiveness
+          setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: isoDate });
           setRole('付費用戶');
+          setExpiryDate(isoDate.split('T')[0]);
       } else { setError(t(result.messageKey)); }
   };
 
@@ -230,7 +277,6 @@ export const AdminPanel: React.FC = () => {
       if (window.confirm(t('confirmClearData'))) { clearImportedTransactions(); setImportStatus(t('dataCleared')); }
   };
 
-  // Full System Backup (Export)
   const handleSystemBackup = () => {
       const backupData = {
           users: localStorage.getItem('app_users'),
@@ -252,7 +298,6 @@ export const AdminPanel: React.FC = () => {
       setImportStatus('系統備份已下載。請妥善保存此檔案，在新裝置上使用「還原系統」功能即可恢復所有設定。');
   };
 
-  // Full System Restore (Import)
   const handleSystemRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -305,6 +350,14 @@ export const AdminPanel: React.FC = () => {
                             <p className="text-[10px] mt-1 ml-7 leading-tight opacity-80">
                                 未偵測到 Supabase 設定。請在專案根目錄建立 <code>.env</code> 檔案並填入 URL 與 Key。目前使用瀏覽器暫存。
                             </p>
+                        )}
+                        {isFailsafeMode && (
+                            <div className="mt-2 text-xs bg-red-100 text-red-800 p-2 rounded border border-red-300">
+                                <strong>⚠️ 警告：離線管理模式</strong>
+                                <p className="mt-1">
+                                    資料庫連線失敗。您目前使用的是緊急備用管理員帳號，無法讀寫真實資料庫。請檢查網路或 Supabase 設定。
+                                </p>
+                            </div>
                         )}
                     </div>
 
@@ -369,7 +422,68 @@ export const AdminPanel: React.FC = () => {
                 <div className="flex gap-3"><button onClick={handleExportCsv} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">{t('exportCsv')}</button><button onClick={handleAddNew} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">+ {t('addUser')}</button></div>
             </div>
             <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">Name</th><th className="p-4 text-sm">Role</th><th className="p-4 text-sm">Expiry</th><th className="p-4 text-sm text-right">Action</th></tr></thead><tbody>{users.map(u=>(<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry?new Date(u.subscriptionExpiry).toLocaleDateString():'-'}</td><td className="p-4 text-right"><button onClick={()=>handleEdit(u)} className="text-blue-600 mr-2">Edit</button><button onClick={()=>initiateDelete(u.email)} className="text-red-600">Del</button></td></tr>))}</tbody></table></div>
-            {(isEditing||isAdding)&&(<div className="bg-gray-50 p-6 rounded-xl border"><h3 className="font-bold mb-4">{isAdding?'Add':'Edit'} User</h3><form onSubmit={handleSubmit} className="space-y-4"><div className="grid grid-cols-2 gap-4"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="border p-2 rounded" required /><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" className="border p-2 rounded" /><input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Name" className="border p-2 rounded" required /><input type="text" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone" className="border p-2 rounded" required /><select value={role} onChange={e=>setRole(e.target.value as UserRole)} className="border p-2 rounded">{roles.map(r=><option key={r} value={r}>{t(r)}</option>)}</select></div>{isEditing&&( <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded"><h4 className="font-bold text-green-800 mb-2">訂閱管理</h4><div className="flex gap-2 mb-3"><button type="button" onClick={()=>handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs">+30 Days</button><button type="button" onClick={()=>handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs">+120 Days</button><button type="button" onClick={()=>handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs">+365 Days</button></div><div className="border-t border-green-200 pt-3"><button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 font-bold flex items-center gap-1 disabled:opacity-50"><EnvelopeIcon className="h-3 w-3" /> {sendingEmail?'發送中...':'📧 發送帳號通知信'}</button></div></div>)}<div className="flex justify-end gap-2"><button type="button" onClick={resetForm} className="px-4 py-2 text-gray-600">{t('cancel')}</button><button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded">{t('saveChanges')}</button></div></form></div>)}
+            {(isEditing||isAdding)&&(
+                <div className="bg-gray-50 p-6 rounded-xl border">
+                    <h3 className="font-bold mb-4">{isAdding?'Add':'Edit'} User</h3>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
+                                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Password</label>
+                                <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={isEditing ? t('passwordPlaceholderEdit') : t('passwordPlaceholderAdd')} className="w-full border p-2 rounded" />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Name</label>
+                                <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Phone</label>
+                                <input type="text" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Role</label>
+                                <select value={role} onChange={e=>handleRoleChange(e.target.value as UserRole)} className="w-full border p-2 rounded bg-white">
+                                    {roles.map(r=><option key={r} value={r}>{t(r)}</option>)}
+                                </select>
+                            </div>
+                            {isEditing && (
+                                <div className="col-span-1">
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Subscription Expiry</label>
+                                    <input 
+                                        type="date" 
+                                        value={expiryDate} 
+                                        onChange={e=>setExpiryDate(e.target.value)} 
+                                        className="w-full border p-2 rounded bg-white" 
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1">留白表示無期限或一般會員</p>
+                                </div>
+                            )}
+                        </div>
+                        {isEditing&&( 
+                            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
+                                <h4 className="font-bold text-green-800 mb-2">快速訂閱管理 (點擊以延長)</h4>
+                                <div className="flex gap-2 mb-3">
+                                    <button type="button" onClick={()=>handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+30 Days</button>
+                                    <button type="button" onClick={()=>handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+120 Days</button>
+                                    <button type="button" onClick={()=>handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+365 Days</button>
+                                </div>
+                                <div className="border-t border-green-200 pt-3">
+                                    <button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 font-bold flex items-center gap-1 disabled:opacity-50 hover:underline">
+                                        <EnvelopeIcon className="h-3 w-3" /> {sendingEmail?'發送中...':'📧 發送帳號狀態更新通知信'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                            <button type="button" onClick={resetForm} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">{t('cancel')}</button>
+                            <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold shadow-sm">{t('saveChanges')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
             {(success||error)&&<div className={`mt-4 p-4 rounded ${success?'bg-green-100 text-green-800':'bg-red-100 text-red-800'}`}>{success||error}</div>}
           </div>
         </div>

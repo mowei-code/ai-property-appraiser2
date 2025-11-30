@@ -89,10 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (error) {
             console.error("[Auth] Supabase fetch error:", error.message);
-            // CRITICAL FIX: Do NOT fallback to local storage if API fails in cloud mode.
-            // This prevents "phantom users" (stale local data) from appearing in the admin panel.
-            // We set users to empty (or keep current) to reflect that we couldn't get DB data.
-            // setUsers([]); // Optional: clear list on error to indicate failure
+            // CRITICAL: Do not fallback to local storage on error in cloud mode
             return;
         }
 
@@ -109,8 +106,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // STRICT SOURCE OF TRUTH: Update state directly from DB
             setUsers(mappedUsers);
             
-            // We overwrite local storage just as a backup/cache, but we NEVER read from it in Cloud Mode.
-            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mappedUsers));
+            // Clean local storage cache to prevent phantom users if we ever fall back
+            localStorage.removeItem(LOCAL_USERS_KEY);
         }
     } catch (e) {
         console.error("[Auth] Fetch exception:", e);
@@ -331,9 +328,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // Cloud Add - We typically use `signUp` but that logs the admin out.
-      // Supabase doesn't allow creating users directly from client SDK without admin API (service role).
-      // Since this is a client-side app, we guide the Admin to use "Invite" or just tell user to register.
-      // However, we can simulate it by just returning a message or using a secondary client if we had Service Role Key (we don't here).
       return { success: false, messageKey: 'registrationFailed', message: '雲端模式下，請讓使用者自行註冊，或使用 Supabase Dashboard 新增。' };
   };
 
@@ -364,15 +358,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (updates.name) dbUpdates.name = updates.name;
           if (updates.phone) dbUpdates.phone = updates.phone;
           if (updates.role) dbUpdates.role = updates.role;
-          if (updates.subscriptionExpiry) dbUpdates.subscription_expiry = updates.subscriptionExpiry;
+          
+          // Fix: Ensure subscription_expiry is properly handled (null or valid date string)
+          if (updates.subscriptionExpiry !== undefined) {
+              dbUpdates.subscription_expiry = updates.subscriptionExpiry;
+          }
 
           // Attempt DB Update
           const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
           
           if (error) {
               console.error("Supabase update error:", error);
-              // CRITICAL: Return FAILURE so Admin Panel knows the DB update failed. 
-              // DO NOT update local state here.
               return { 
                   success: false, 
                   messageKey: 'updateUserSuccess', 
