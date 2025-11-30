@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (error) {
             console.error("[Auth] Supabase fetch error:", error.message);
-            // CRITICAL: Do not fallback to local storage on error in cloud mode
+            // CRITICAL: Do not fallback to local storage on error in cloud mode to avoid phantom state
             return;
         }
 
@@ -347,7 +347,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // 2. CLOUD MODE -> Database First (PESSIMISTIC UPDATE)
       try {
-          // Find real DB ID
+          // Find real DB ID based on Email
           const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
           
           if (!targetUser) {
@@ -365,7 +365,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           // Attempt DB Update
-          const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
+          // Use .select() to verify the update actually happened (checks RLS implicitly)
+          const { data: updatedData, error } = await supabase
+              .from('profiles')
+              .update(dbUpdates)
+              .eq('id', targetUser.id)
+              .select();
           
           if (error) {
               console.error("Supabase update error:", error);
@@ -373,6 +378,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   success: false, 
                   messageKey: 'updateUserSuccess', 
                   message: `資料庫更新失敗: ${error.message} (可能權限不足)` 
+              };
+          }
+
+          // CRITICAL: Check if any row was actually returned/updated
+          if (!updatedData || updatedData.length === 0) {
+               console.error("Supabase update returned no data (RLS blocking?)");
+               return { 
+                  success: false, 
+                  messageKey: 'updateUserSuccess', 
+                  message: "更新失敗：資料庫未回傳結果，您可能沒有權限修改此用戶 (RLS)。" 
               };
           }
 

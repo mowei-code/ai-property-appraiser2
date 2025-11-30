@@ -1,614 +1,495 @@
 
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
-import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
-import { SettingsContext, Settings } from '../contexts/SettingsContext';
+import React, { useState, useContext, useEffect, useRef } from 'react';
+import type { User, UserRole } from '../types';
 import { AuthContext } from '../contexts/AuthContext';
+import { SettingsContext } from '../contexts/SettingsContext';
+import { isSupabaseConfigured } from '../supabaseClient';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
-import { SparklesIcon } from './icons/SparklesIcon';
-import { CheckCircleIcon } from './icons/CheckCircleIcon';
-import { ArrowPathIcon } from './icons/ArrowPathIcon';
-import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { parseMOICSV } from '../utils';
+import { saveImportedTransactions, clearImportedTransactions } from '../services/realEstateService';
+import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import { LinkIcon } from './icons/LinkIcon';
+import { EnvelopeIcon } from './icons/EnvelopeIcon';
+import { sendEmail } from '../services/emailService';
+import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
+import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
+import { CheckCircleIcon } from './icons/CheckCircleIcon'; 
+import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; 
+import { ArrowPathIcon } from './icons/ArrowPathIcon';
 
-// --- Error Boundary for PayPal ---
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-  fallback: (error: Error) => ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("PayPal SDK Crash caught by boundary:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback(this.state.error!);
-    }
-    return this.props.children || null;
-  }
-}
-
-// --- Sub-component for PayPal Logic ---
-const PayPalPaymentSection: React.FC<{ 
-    amount: string, 
-    description: string, 
-    clientId: string,
-    onApprove: (data: any, actions: any) => Promise<void>,
-    onError: (err: any) => void 
-}> = ({ amount, description, clientId, onApprove, onError }) => {
-    const [{ isPending, isRejected }, dispatch] = usePayPalScriptReducer();
-
-    const handleRetry = () => {
-        dispatch({
-            type: "resetOptions",
-            value: {
-                clientId: clientId,
-                currency: "TWD",
-                intent: "capture",
-                components: "buttons",
-                "data-sdk-integration-source": "react-paypal-js"
-            }
-        } as any);
-    };
-
-    if (isRejected) {
-        return (
-            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm mb-4 border border-red-200 flex flex-col items-start gap-2">
-                <strong>Failed to load PayPal SDK.</strong>
-                <p>This usually happens if the <b>Client ID</b> is invalid or the environment is restricted.</p>
-                {clientId.startsWith('E') && (
-                    <p className="text-red-700 font-bold">
-                        Warning: Your ID starts with 'E'. You might have used the Secret Key instead of the Client ID.
-                    </p>
-                )}
-                <p className="font-mono text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                    Current ID: {clientId.substring(0, 8)}...
-                </p>
-                
-                <div className="flex gap-2 mt-2">
-                    <button 
-                        onClick={handleRetry}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 transition-colors"
-                    >
-                        <ArrowPathIcon className="h-4 w-4" />
-                        Retry Loading
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (isPending) {
-         return (
-            <div className="flex justify-center p-4">
-                <svg className="animate-spin h-6 w-6 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-         );
-    }
-
-    return (
-        <PayPalButtons 
-            style={{ layout: "vertical" }}
-            createOrder={(data, actions) => {
-                return actions.order.create({
-                    intent: "CAPTURE",
-                    purchase_units: [
-                        {
-                            amount: {
-                                currency_code: "TWD",
-                                value: amount
-                            },
-                            description: description
-                        },
-                    ],
-                });
-            }}
-            onApprove={onApprove}
-            onError={onError}
-        />
-    );
-};
-
-export const SettingsModal: React.FC = () => {
-  const { settings, saveSettings, isSettingsModalOpen, setSettingsModalOpen, t } = useContext(SettingsContext);
-  const { currentUser, updateUser } = useContext(AuthContext);
-  const [localSettings, setLocalSettings] = useState<Settings>(settings);
-  const [isSaved, setIsSaved] = useState(false);
-  const [upgradeSuccess, setUpgradeSuccess] = useState('');
+export const AdminPanel: React.FC = () => {
+  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, isFailsafeMode } = useContext(AuthContext);
+  const { t, settings, saveSettings } = useContext(SettingsContext);
+  const [isEditing, setIsEditing] = useState<User | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   
-  // Subscription State
-  const [selectedPlan, setSelectedPlan] = useState<string>('monthly');
-  const [isPaymentStep, setIsPaymentStep] = useState(false);
-  const [paypalError, setPaypalError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('一般用戶');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [expiryDate, setExpiryDate] = useState(''); // New state for manual expiry editing
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Environment Check
-  const isInvalidEnv = !window.location.protocol.startsWith('http');
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  
+  // Settings State
+  const [paypalClientId, setPaypalClientId] = useState(settings.paypalClientId || '');
+  const [systemEmail, setSystemEmail] = useState(settings.systemEmail || '');
+  const [smtpHost, setSmtpHost] = useState(settings.smtpHost || '');
+  const [smtpPort, setSmtpPort] = useState(settings.smtpPort || '587');
+  const [smtpUser, setSmtpUser] = useState(settings.smtpUser || '');
+  const [smtpPass, setSmtpPass] = useState(settings.smtpPass || '');
+  const [configSuccess, setConfigSuccess] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const roles: UserRole[] = ['管理員', '一般用戶', '付費用戶'];
+
+  // Force refresh on mount to clear phantom users
+  useEffect(() => {
+      handleRefreshUsers();
+  }, []);
 
   useEffect(() => {
-    setLocalSettings(settings);
-    setUpgradeSuccess(''); // Reset on modal open
-    setIsPaymentStep(false);
-    setSelectedPlan('monthly');
-    setPaypalError('');
-  }, [settings, isSettingsModalOpen]);
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveSettings(localSettings);
-    setIsSaved(true);
-    setTimeout(() => {
-        setIsSaved(false);
-        setSettingsModalOpen(false);
-    }, 1500);
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-        const { checked } = e.target as HTMLInputElement;
-        setLocalSettings(prev => ({ ...prev, [name]: checked }));
-    } else {
-        setLocalSettings(prev => ({ ...prev, [name]: value as any }));
+    if (isEditing) {
+      setEmail(isEditing.email);
+      setPassword(''); 
+      setRole(isEditing.role);
+      setName(isEditing.name || '');
+      setPhone(isEditing.phone || '');
+      // Format ISO date to YYYY-MM-DD for input type="date"
+      if (isEditing.subscriptionExpiry) {
+          setExpiryDate(new Date(isEditing.subscriptionExpiry).toISOString().split('T')[0]);
+      } else {
+          setExpiryDate('');
+      }
     }
+  }, [isEditing]);
+  
+  useEffect(() => {
+      setPaypalClientId(settings.paypalClientId || '');
+      setSystemEmail(settings.systemEmail || '');
+      setSmtpHost(settings.smtpHost || '');
+      setSmtpPort(settings.smtpPort || '587');
+      setSmtpUser(settings.smtpUser || '');
+      setSmtpPass(settings.smtpPass || '');
+  }, [settings]);
+
+  const resetForm = () => {
+    setIsAdding(false);
+    setIsEditing(null);
+    setEmail('');
+    setPassword('');
+    setRole('一般用戶');
+    setName('');
+    setPhone('');
+    setExpiryDate('');
+    setError('');
+    setSuccess('');
   };
 
-  const plans = [
-      { id: 'monthly', label: t('planMonthly'), priceDisplay: 'NT$120', value: '120' },
-      { id: 'biannual', label: t('planBiannual'), priceDisplay: 'NT$560', value: '560' },
-      { id: 'yearly', label: t('planYearly'), priceDisplay: 'NT$960', value: '960' },
-  ];
+  const handleRefreshUsers = async () => {
+      setIsRefreshing(true);
+      await refreshUsers();
+      setTimeout(() => setIsRefreshing(false), 500);
+  };
 
-  const currentPlan = plans.find(p => p.id === selectedPlan);
-
-  const handlePayPalApprove = async (data: any, actions: any) => {
-      try {
-          await actions.order.capture();
-          
-          // Real Upgrade Logic
-          if (currentUser) {
-            let daysToAdd = 30;
-            if (selectedPlan === 'biannual') daysToAdd = 120;
-            if (selectedPlan === 'yearly') daysToAdd = 365;
-
-            const now = new Date();
-            let newExpiryDate = now;
-            
-            if (currentUser.subscriptionExpiry) {
-                const currentExpiry = new Date(currentUser.subscriptionExpiry);
-                if (currentExpiry > now) {
-                    newExpiryDate = currentExpiry;
-                }
-            }
-            
-            newExpiryDate.setDate(newExpiryDate.getDate() + daysToAdd);
-
-            const result = await updateUser(currentUser.email, { 
-                role: '付費用戶',
-                subscriptionExpiry: newExpiryDate.toISOString()
-            });
-
-            if (result.success) {
-                setUpgradeSuccess(t('upgradeSuccess'));
-                setPaypalError('');
-            } else {
-                setPaypalError("Upgrade failed locally: " + t(result.messageKey));
-            }
-          }
-
-      } catch (err: any) {
-          console.error("PayPal Capture Error:", err);
-          setPaypalError(t('paymentFailed'));
+  const handleRoleChange = (newRole: UserRole) => {
+      setRole(newRole);
+      // Auto-populate expiry if switching to Paid User and no date is set
+      if (newRole === '付費用戶' && !expiryDate) {
+          const nextMonth = new Date();
+          nextMonth.setDate(nextMonth.getDate() + 30);
+          setExpiryDate(nextMonth.toISOString().split('T')[0]);
       }
   };
 
-  // Helper to create a data URI for testing PayPal ID in a new tab without server
-  const getTestLink = (clientId: string) => {
-      const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PayPal Connection Test</title>
-    <script src="https://www.paypal.com/sdk/js?client-id=${clientId}&currency=TWD&components=buttons&debug=true"></script>
-    <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f3f4f6; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 90%; border: 1px solid #e5e7eb; }
-        .client-id { background: #f9fafb; padding: 0.5rem; border-radius: 6px; font-family: monospace; color: #6b7280; word-break: break-all; margin-bottom: 1.5rem; font-size: 0.8rem; border: 1px solid #d1d5db; }
-        #paypal-button-container { margin-top: 1.5rem; min-height: 50px; }
-        .status { margin-bottom: 1rem; padding: 1rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; }
-        .status.loading { background-color: #e0f2fe; color: #0369a1; }
-        .status.success { background-color: #dcfce7; color: #15803d; }
-        .status.warning { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
-        .status.error { background-color: #fee2e2; color: #b91c1c; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>PayPal 連線測試</h2>
-        <div class="client-id">ID: ${clientId}</div>
-        <div id="status" class="status loading">正在連線 PayPal SDK...</div>
-        <div id="paypal-button-container"></div>
-    </div>
-    <script>
-        const statusEl = document.getElementById('status');
-        window.onload = function() {
-            if (window.paypal) {
-                statusEl.textContent = "✅ SDK 載入成功！Client ID 有效。";
-                statusEl.className = "status success";
-                
-                // Attempt to render button (might fail in sandbox data-uri)
-                try {
-                    paypal.Buttons({
-                        style: { layout: 'vertical' },
-                        createOrder: function(data, actions) { return actions.order.create({ purchase_units: [{ amount: { value: '1.00' } }] }); }
-                    }).render('#paypal-button-container').catch(e => {
-                        console.warn("Render blocked (expected in sandbox):", e);
-                        statusEl.innerHTML = "✅ <b>連線成功！ID 正確。</b><br><span style='font-size:0.8em; font-weight:normal'>(按鈕渲染受瀏覽器安全限制阻擋，但 ID 驗證已通過)</span>";
-                        statusEl.className = "status success"; 
-                    });
-                } catch(e) {
-                    // Ignore render errors if SDK loaded fine
-                }
-            } else {
-                statusEl.innerHTML = "❌ SDK 載入失敗。<br><span style='font-size:0.8em; font-weight:normal'>請檢查網路或確認 ID 是否正確。</span>";
-                statusEl.className = "status error";
-            }
-        };
-    </script>
-</body>
-</html>`;
-      return `data:text/html;base64,${btoa(unescape(encodeURIComponent(htmlContent)))}`;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    let result;
+    if (isAdding) {
+      // For adding, we don't usually set expiry immediately unless logic changes, keeping it simple.
+      result = await addUser({ email, password, role, name, phone });
+    } else if (isEditing) {
+      const updatedData: Partial<User> = { role, name, phone };
+      if (password) updatedData.password = password;
+      
+      // Update Expiry Date Logic
+      if (expiryDate) {
+          updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
+      } else {
+          // If cleared, explicitly set to null
+          updatedData.subscriptionExpiry = null; 
+      }
+
+      result = await updateUser(isEditing.email, updatedData);
+    } else { return; }
+
+    if (result.success) {
+      setSuccess(t(result.messageKey));
+      await refreshUsers(); // CRITICAL: Force refresh list after save
+      if(isAdding) resetForm();
+    } else {
+      setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
+    }
+  };
+  
+  const handleSaveConfig = () => {
+      saveSettings({ 
+          paypalClientId: paypalClientId.trim(),
+          systemEmail: systemEmail.trim(),
+          smtpHost: smtpHost.trim(),
+          smtpPort: smtpPort.trim(),
+          smtpUser: smtpUser.trim(),
+          smtpPass: smtpPass.trim()
+      });
+      setConfigSuccess(t('configSaved'));
+      setError('');
+      setTimeout(() => setConfigSuccess(''), 3000);
   };
 
-  if (!isSettingsModalOpen) return null;
+  const handleSendRealEmail = async () => {
+      if (!isEditing) return;
+      if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+          setError("請先在左側系統設定中設定 SMTP 資訊 (Host, User, Password)。");
+          return;
+      }
+      setSendingEmail(true);
+      setSuccess(''); setError('');
+
+      const subject = `[AI房產估價師] 帳號通知`;
+      const text = `親愛的 ${isEditing.name || '會員'} 您好，\n\n您的帳號狀態已更新為：${isEditing.role}\n訂閱到期日：${isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry).toLocaleDateString() : '無'}\n\n--\nAI 房產估價師系統`;
+      
+      const result = await sendEmail({
+          smtpHost: settings.smtpHost, 
+          smtpPort: settings.smtpPort, 
+          smtpUser: settings.smtpUser, 
+          smtpPass: settings.smtpPass,
+          to: isEditing.email, 
+          cc: settings.smtpUser, 
+          subject, 
+          text
+      });
+
+      setSendingEmail(false);
+      if (result.success) setSuccess(`郵件已發送至 ${isEditing.email}`);
+      else setError(`發送失敗: ${result.error}`);
+  };
+
+  const handleSimulatePaymentForAdmin = async () => {
+      if (!currentUser) return;
+      const now = new Date();
+      const newExpiryDate = new Date();
+      newExpiryDate.setDate(now.getDate() + 30); 
+      const updateData: Partial<User> = { subscriptionExpiry: newExpiryDate.toISOString() };
+      if (currentUser.role !== '管理員') updateData.role = '付費用戶';
+      
+      const result = await updateUser(currentUser.email, updateData);
+      if (result.success) setSuccess("模擬成功！已延長30天訂閱。");
+      else setError("模擬失敗: " + t(result.messageKey));
+  };
+
+  const initiateDelete = (userEmail: string) => { setUserToDelete(userEmail); setError(''); setSuccess(''); };
+  
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    const result = await deleteUser(userToDelete);
+    if (result.success) { setSuccess(t(result.messageKey)); if (isEditing?.email === userToDelete) resetForm(); } 
+    else { setError(t(result.messageKey)); }
+    setUserToDelete(null);
+  };
+  
+  const handleEdit = (user: User) => { setIsAdding(false); setIsEditing(user); setSuccess(''); setError(''); };
+  const handleAddNew = () => { resetForm(); setIsAdding(true); };
+  
+  const handleExtendSubscription = async (days: number) => {
+      if (!isEditing) return;
+      const now = new Date();
+      let newExpiryDate = now;
+      
+      // If manually edited date exists, base calculation on that, else check existing subscription
+      const baseDate = expiryDate ? new Date(expiryDate) : (isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry) : now);
+      
+      if (baseDate > now) {
+          newExpiryDate = new Date(baseDate);
+      }
+      
+      newExpiryDate.setDate(newExpiryDate.getDate() + days);
+      const isoDate = newExpiryDate.toISOString();
+
+      // Update backend
+      const result = await updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: isoDate });
+      
+      if (result.success) {
+          setSuccess(t('subscriptionExtended', { date: newExpiryDate.toLocaleDateString() }));
+          // Update local state immediately for UI responsiveness
+          setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: isoDate });
+          setRole('付費用戶');
+          setExpiryDate(isoDate.split('T')[0]);
+          
+          // CRITICAL FIX: Force refresh the main user list so the background table updates to reflect DB state
+          await refreshUsers();
+      } else { 
+          setError(t(result.messageKey) + (result.message ? `: ${result.message}` : '')); 
+      }
+  };
+
+  const handleExportCsv = () => {
+    const headers = ['Email', 'Name', 'Phone', 'Role', 'Subscription Expiry'];
+    const csvContent = [headers.join(','), ...users.map(u => [u.email, u.name||'', u.phone||'', u.role, u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString() : '-'].join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `members.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setImportStatus(t('importing'));
+      const reader = new FileReader();
+      reader.readAsText(file, 'Big5');
+      reader.onload = (e) => {
+          const content = e.target?.result as string;
+          if (content) {
+               const properties = parseMOICSV(content);
+               if(properties.length > 0) {
+                   const count = saveImportedTransactions(properties);
+                   setImportStatus(t('importSuccess', { count: count.toString() }));
+               } else {
+                   setImportStatus(t('importFailedNoData'));
+               }
+          }
+      };
+  };
+  const handleClearData = () => {
+      if (window.confirm(t('confirmClearData'))) { clearImportedTransactions(); setImportStatus(t('dataCleared')); }
+  };
+
+  const handleSystemBackup = () => {
+      const backupData = {
+          users: localStorage.getItem('app_users'),
+          settings: localStorage.getItem('app_system_settings'),
+          realEstateData: localStorage.getItem('imported_real_estate_data'),
+          timestamp: new Date().toISOString(),
+          version: '1.0'
+      };
+      
+      const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `aiproperty_backup_${dateStr}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setImportStatus('系統備份已下載。請妥善保存此檔案，在新裝置上使用「還原系統」功能即可恢復所有設定。');
+  };
+
+  const handleSystemRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      if (!window.confirm('警告：還原操作將會覆蓋目前裝置上的所有設定與會員資料。確定要繼續嗎？')) {
+          if (restoreInputRef.current) restoreInputRef.current.value = '';
+          return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const content = e.target?.result as string;
+              const backup = JSON.parse(content);
+              
+              if (backup.users) localStorage.setItem('app_users', backup.users);
+              if (backup.settings) localStorage.setItem('app_system_settings', backup.settings);
+              if (backup.realEstateData) localStorage.setItem('imported_real_estate_data', backup.realEstateData);
+              
+              alert('系統還原成功！頁面將重新整理以套用設定。');
+              window.location.reload();
+          } catch (err) {
+              console.error("Restore failed", err);
+              alert('還原失敗：檔案格式錯誤或損毀。');
+          }
+      };
+      reader.readAsText(file);
+  };
 
   return (
-     <div 
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={() => setSettingsModalOpen(false)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-    >
-      <div 
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl flex flex-col overflow-hidden border border-orange-400 dark:border-orange-500 max-h-[90vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 id="settings-title" className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <Cog6ToothIcon className="h-6 w-6 text-blue-600" />
-                {t('settings')}
-            </h2>
-            <button onClick={() => setSettingsModalOpen(false)} className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('close')}>
-                <XMarkIcon className="h-6 w-6 dark:text-gray-300" />
-            </button>
-        </header>
-        
-        <main className="flex-grow p-6 overflow-y-auto">
-          <form id="settings-form" onSubmit={handleSave} className="space-y-6">
-            {/* Account Upgrade Section for General Users */}
-            {currentUser?.role === '一般用戶' && (
-              <fieldset className="space-y-4 p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border-2 border-amber-300 dark:border-amber-700/50 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 p-2 opacity-10">
-                    <SparklesIcon className="h-24 w-24 text-amber-600" />
-                 </div>
-                <legend className="relative z-10 text-lg font-bold text-amber-800 dark:text-amber-400 flex items-center gap-2">
-                  <SparklesIcon className="h-5 w-5" />
-                  {t('upgradeAccount')}
-                </legend>
-                
-                {upgradeSuccess ? (
-                  <div className="p-6 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-xl text-center animate-fade-in">
-                    <div className="flex justify-center mb-3">
-                        <CheckCircleIcon className="h-12 w-12 text-green-600 dark:text-green-400" />
-                    </div>
-                    <p className="font-bold text-lg">{upgradeSuccess}</p>
-                  </div>
-                ) : isPaymentStep ? (
-                    // Payment Confirmation Step with PayPal
-                    <div className="relative z-10 animate-fade-in">
-                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4">{t('confirmPaymentTitle')}</h4>
-                        
-                        <div className="bg-white/60 dark:bg-slate-900/60 p-5 rounded-xl border border-amber-200 dark:border-amber-800/50 mb-4 backdrop-blur-sm">
-                             <div className="flex justify-between items-center mb-2 border-b border-dashed border-gray-300 dark:border-gray-600 pb-2">
-                                 <span className="text-gray-600 dark:text-gray-300 font-medium">{t('selectedPlan')}</span>
-                                 <span className="font-bold text-gray-900 dark:text-white">{currentPlan?.label}</span>
-                             </div>
-                             <div className="flex justify-between items-center pt-1">
-                                 <span className="text-gray-600 dark:text-gray-300 font-medium">{t('paymentAmount')}</span>
-                                 <span className="font-black text-2xl text-blue-600 dark:text-blue-400">{currentPlan?.priceDisplay}</span>
-                             </div>
+    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-orange-400 dark:border-orange-500">
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-3"><ShieldCheckIcon className="h-8 w-8 text-blue-600" />{t('adminPanel')}</h2>
+          <button onClick={() => setAdminPanelOpen(false)} className="p-2 rounded-full hover:bg-gray-200"><XMarkIcon className="h-6 w-6" /></button>
+        </div>
+        <div className="flex flex-col md:flex-row h-full overflow-hidden">
+          <div className="w-full md:w-64 bg-gray-50 dark:bg-gray-800 border-r p-4 overflow-y-auto">
+            <div className="space-y-8">
+                <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
+                    <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
+                    
+                    {/* Supabase Status Indicator */}
+                    <div className={`mb-4 p-3 rounded-lg border ${isSupabaseConfigured ? 'bg-green-100 border-green-200 text-green-800' : 'bg-yellow-100 border-yellow-200 text-yellow-800'}`}>
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                            {isSupabaseConfigured ? <CheckCircleIcon className="h-5 w-5 flex-shrink-0" /> : <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />}
+                            <span>{isSupabaseConfigured ? '雲端資料庫 (Connected)' : '本地模式 (Local Mode)'}</span>
                         </div>
-                        
-                        {paypalError && (
-                             <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm mb-4">
-                                 {paypalError}
-                             </div>
+                        {!isSupabaseConfigured && (
+                            <p className="text-[10px] mt-1 ml-7 leading-tight opacity-80">
+                                未偵測到 Supabase 設定。請在專案根目錄建立 <code>.env</code> 檔案並填入 URL 與 Key。目前使用瀏覽器暫存。
+                            </p>
                         )}
-
-                        {settings.paypalClientId ? (
-                            // CRITICAL: Do NOT render PayPalScriptProvider if environment is invalid (file/blob protocol).
-                            isInvalidEnv ? (
-                                <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm mb-4 border border-amber-200">
-                                    <h4 className="font-bold flex items-center gap-2 mb-1">
-                                        <ExclamationTriangleIcon className="h-5 w-5" />
-                                        Unsupported Environment (不支援的環境)
-                                    </h4>
-                                    <p className="mb-2">PayPal 支付功能需要標準的 Web Server 環境 (http/https)。</p>
-                                    <p className="text-xs opacity-80 break-all mb-3">
-                                        目前執行於: <code className="font-mono bg-amber-100 px-1 rounded">{window.location.protocol}//{window.location.host || 'localhost'}</code>
-                                    </p>
-                                    <p className="text-xs text-amber-700 mb-2">
-                                        您正處於預覽或本機檔案模式，PayPal 安全策略禁止在此環境下載入。
-                                    </p>
-                                    
-                                    <div className="flex flex-col gap-2 mt-3">
-                                        <a 
-                                            href={getTestLink(settings.paypalClientId)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="w-full py-2.5 px-3 bg-white text-blue-600 border border-blue-200 font-bold rounded-lg shadow-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <LinkIcon className="h-4 w-4" />
-                                            在新分頁驗證 Client ID (推薦)
-                                        </a>
-                                        <p className="text-[10px] text-center text-gray-500 mt-1">此按鈕會開啟一個獨立的測試頁面，確認您的 Client ID 是否正確。</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="my-4 min-h-[150px]">
-                                    <PayPalErrorBoundary
-                                        fallback={(err) => (
-                                            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
-                                                <p className="font-bold mb-2">PayPal SDK 載入或執行錯誤</p>
-                                                <p className="text-xs mb-3 font-mono break-all">{err.message}</p>
-                                                
-                                                <div className="flex flex-col gap-2">
-                                                    <a 
-                                                        href={getTestLink(settings.paypalClientId)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="w-full py-2 px-3 bg-white text-red-600 border border-red-200 font-bold rounded-lg shadow-sm hover:bg-red-50 transition-colors text-xs flex items-center justify-center gap-2"
-                                                    >
-                                                        <LinkIcon className="h-4 w-4" />
-                                                        在新分頁驗證 Client ID (視覺化測試)
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        )}
-                                    >
-                                        <PayPalScriptProvider 
-                                            options={{ 
-                                                clientId: settings.paypalClientId, 
-                                                currency: "TWD",
-                                                intent: "capture",
-                                                components: "buttons",
-                                                "data-sdk-integration-source": "react-paypal-js"
-                                            }}
-                                            key={settings.paypalClientId} 
-                                        >
-                                        <PayPalPaymentSection 
-                                                amount={currentPlan?.value || "120"}
-                                                description={`AI Property Appraiser - ${currentPlan?.label}`}
-                                                clientId={settings.paypalClientId}
-                                                onApprove={handlePayPalApprove}
-                                                onError={(err: any) => {
-                                                    console.error("PayPal Error:", err);
-                                                    const errMsg = err?.message || String(err);
-                                                    setPaypalError(t('paymentError') + ": " + errMsg);
-                                                }}
-                                        />
-                                        </PayPalScriptProvider>
-                                    </PayPalErrorBoundary>
-                                </div>
-                            )
-                        ) : (
-                            <div className="p-4 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">
-                                {t('paypalNotConfigured')}
+                        {isFailsafeMode && (
+                            <div className="mt-2 text-xs bg-red-100 text-red-800 p-2 rounded border border-red-300">
+                                <strong>⚠️ 警告：離線管理模式</strong>
+                                <p className="mt-1">
+                                    資料庫連線失敗。您目前使用的是緊急備用管理員帳號，無法讀寫真實資料庫。請檢查網路或 Supabase 設定。
+                                </p>
                             </div>
                         )}
-
-                        <button 
-                            type="button" 
-                            onClick={() => setIsPaymentStep(false)} 
-                            className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                            {t('back')}
-                        </button>
                     </div>
-                ) : (
-                    // Plan Selection Step
-                    <div className="relative z-10 space-y-4 animate-fade-in">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
-                            {t('upgradeDescription')}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {plans.map(plan => (
-                                <div 
-                                    key={plan.id}
-                                    onClick={() => setSelectedPlan(plan.id)}
-                                    className={`cursor-pointer relative p-3 rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center bg-white/80 dark:bg-slate-800/80 ${selectedPlan === plan.id ? 'border-amber-500 shadow-md scale-105 z-10 ring-2 ring-amber-200 dark:ring-amber-900' : 'border-transparent hover:border-amber-200 dark:hover:border-amber-800 hover:bg-white dark:hover:bg-slate-800 shadow-sm'}`}
-                                >
-                                    {selectedPlan === plan.id && (
-                                        <div className="absolute -top-3 -right-3 bg-amber-500 text-white rounded-full p-1 shadow-sm">
-                                            <CheckCircleIcon className="h-5 w-5" />
-                                        </div>
-                                    )}
-                                    <div className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1">{plan.label}</div>
-                                    <div className="text-amber-600 dark:text-amber-400 font-black text-lg">{plan.priceDisplay}</div>
-                                </div>
-                            ))}
+
+                    <div className="space-y-4">
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-semibold text-gray-500">PayPal Client ID</label>
+                                <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">Get ID <LinkIcon className="h-3 w-3" /></a>
+                            </div>
+                            <input type="text" value={paypalClientId} onChange={e=>setPaypalClientId(e.target.value.trim())} className="w-full border p-1 rounded text-sm" />
                         </div>
-                        <button 
-                            type="button" 
-                            onClick={() => setIsPaymentStep(true)}
-                            className="w-full px-4 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all hover:-translate-y-0.5 mt-2 flex items-center justify-center gap-2"
-                        >
-                            {t('upgradeWithPaypal')}
+                        <div className="border-t pt-2">
+                            <h4 className="text-xs font-bold text-gray-500 mb-2">SMTP 設定 (通知信)</h4>
+                            <input type="text" value={smtpHost} onChange={e=>setSmtpHost(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="Host (e.g. smtp.gmail.com)" />
+                            <input type="text" value={smtpPort} onChange={e=>setSmtpPort(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="Port (587)" />
+                            <input type="text" value={smtpUser} onChange={e=>setSmtpUser(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="User / Email" />
+                            <input type="password" value={smtpPass} onChange={e=>setSmtpPass(e.target.value.trim())} className="w-full border p-1 rounded text-sm" placeholder="App Password" />
+                        </div>
+                        <div><label className="text-xs font-semibold text-gray-500">管理員 Email (接收通知用)</label><input type="email" value={systemEmail} onChange={e=>setSystemEmail(e.target.value.trim())} className="w-full border p-1 rounded text-sm" /></div>
+                        <button onClick={handleSaveConfig} className="w-full bg-gray-800 text-white text-sm font-bold rounded py-2">{t('saveConfiguration')}</button>
+                        <button onClick={handleSimulatePaymentForAdmin} className="w-full bg-amber-600 text-white text-xs font-bold rounded py-2 mt-2">模擬付款 (自身測試)</button>
+                        {configSuccess && <p className="text-xs text-green-600 text-center">{configSuccess}</p>}
+                    </div>
+                </div>
+                
+                <div className="bg-blue-50 p-4 rounded-xl">
+                    <h3 className="font-bold text-blue-800 mb-2">資料與備份管理</h3>
+                    
+                    <div className="mb-4 pb-4 border-b border-blue-200">
+                        <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded py-2 mb-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <ArrowDownTrayIcon className="h-4 w-4" /> 備份系統資料
                         </button>
-                    </div>
-                )}
-              </fieldset>
-            )}
-            
-            {/* Current Subscription Display for Paid Users */}
-            {currentUser?.role === '付費用戶' && currentUser?.subscriptionExpiry && (
-                 <div className="p-5 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-3 mb-2">
-                        <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-                        <span className="font-bold text-lg text-green-900 dark:text-green-100">{t('paidUser')}</span>
-                    </div>
-                    <p className="text-sm text-green-800 dark:text-green-300 ml-9">
-                        {t('subscriptionExpiresOn')}: <span className="font-mono font-bold">{new Date(currentUser.subscriptionExpiry).toLocaleDateString()}</span>
-                    </p>
-                 </div>
-            )}
-
-            {/* API Key Settings */}
-            <fieldset className="space-y-4">
-              <legend className="text-lg font-semibold text-gray-900 dark:text-white">{t('apiKeySettings')}</legend>
-              <div>
-                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
-                    {t('yourGeminiApiKey_linkText')}
-                  </a>
-                  <span className="text-gray-700 dark:text-gray-300 ml-1">({t('yourGeminiApiKey_promptText')})</span>
-                </label>
-                <input
-                  type="password"
-                  id="apiKey"
-                  name="apiKey"
-                  value={localSettings.apiKey}
-                  onChange={handleChange}
-                  placeholder={t('enterYourGeminiApiKey')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('apiKeyPrivacyNotice')}
-                </p>
-              </div>
-               {currentUser?.role === '管理員' && (
-                  <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
-                      <div>
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                name="allowPublicApiKey"
-                                checked={localSettings.allowPublicApiKey}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-200">{t('enableGlobalApiKey')}</span>
-                        </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            {t('globalApiKeyNotice')}
+                        <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
+                        <button onClick={()=>restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <ArrowUpTrayIcon className="h-4 w-4" /> 還原系統資料
+                        </button>
+                        <p className="text-[10px] text-blue-600 mt-1 leading-tight">
+                            * 換裝置前請先備份，至新裝置還原即可同步設定與會員資料。
                         </p>
-                      </div>
-                      {localSettings.allowPublicApiKey && (
-                          <div className="mt-3">
-                               <label htmlFor="publicApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  {t('globalGeminiApiKey')}
-                              </label>
-                              <input
-                                  type="password"
-                                  id="publicApiKey"
-                                  name="publicApiKey"
-                                  value={localSettings.publicApiKey}
-                                  onChange={handleChange}
-                                  placeholder={t('enterGlobalApiKey')}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              />
-                          </div>
-                      )}
-                  </div>
-               )}
-            </fieldset>
+                    </div>
 
-            {/* Appearance Settings */}
-            <fieldset className="space-y-4">
-              <legend className="text-lg font-semibold text-gray-900 dark:text-white">{t('appearanceAndDisplay')}</legend>
-              <div>
-                <label htmlFor="theme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('theme')}
-                </label>
-                <select
-                  id="theme"
-                  name="theme"
-                  value={localSettings.theme}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="light">{t('theme_light')}</option>
-                  <option value="dark">{t('theme_dark')}</option>
-                  <option value="system">{t('theme_system')}</option>
-                </select>
-              </div>
-              
-              <div>
-                <label htmlFor="font" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('font')}
-                </label>
-                <select
-                  id="font"
-                  name="font"
-                  value={localSettings.font}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="sans">{t('fontSans')}</option>
-                  <option value="serif">{t('fontSerif')}</option>
-                  <option value="mono">{t('font_mono')}</option>
-                  <option value="kai">{t('font_kai')}</option>
-                  <option value="cursive">{t('font_cursive')}</option>
-                </select>
-              </div>
-               <div>
-                <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('language')}
-                </label>
-                <select
-                  id="language"
-                  name="language"
-                  value={localSettings.language}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="zh-TW">{t('lang_zh-TW')}</option>
-                  <option value="zh-CN">{t('lang_zh-CN')}</option>
-                  <option value="en">{t('lang_en')}</option>
-                  <option value="ja">{t('lang_ja')}</option>
-                </select>
-              </div>
-            </fieldset>
-          </form>
-        </main>
-        
-        <footer className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end bg-gray-50 dark:bg-gray-800/50">
-            <button type="submit" form="settings-form" className={`px-6 py-3 font-semibold rounded-lg shadow-md transition-colors w-full sm:w-auto ${isSaved ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-              {isSaved ? t('saved') : t('saveSettings')}
-            </button>
-        </footer>
+                    <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
+                    <button onClick={()=>fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">匯入 實價登錄 CSV</button>
+                    <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">清除實價登錄資料</button>
+                    {importStatus && <p className="text-xs text-blue-700 text-center mt-2 font-bold">{importStatus}</p>}
+                </div>
+            </div>
+          </div>
+          <div className="flex-grow p-6 overflow-y-auto bg-white dark:bg-gray-900">
+             <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold">{t('userList')}</h3>
+                    <button 
+                        onClick={handleRefreshUsers}
+                        disabled={isRefreshing}
+                        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
+                        title="重新整理列表"
+                    >
+                        <ArrowPathIcon className={`h-5 w-5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+                    </button>
+                </div>
+                <div className="flex gap-3"><button onClick={handleExportCsv} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">{t('exportCsv')}</button><button onClick={handleAddNew} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">+ {t('addUser')}</button></div>
+            </div>
+            <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">Name</th><th className="p-4 text-sm">Role</th><th className="p-4 text-sm">Expiry</th><th className="p-4 text-sm text-right">Action</th></tr></thead><tbody>{users.map(u=>(<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry?new Date(u.subscriptionExpiry).toLocaleDateString():'-'}</td><td className="p-4 text-right"><button onClick={()=>handleEdit(u)} className="text-blue-600 mr-2">Edit</button><button onClick={()=>initiateDelete(u.email)} className="text-red-600">Del</button></td></tr>))}</tbody></table></div>
+            {(isEditing||isAdding)&&(
+                <div className="bg-gray-50 p-6 rounded-xl border">
+                    <h3 className="font-bold mb-4">{isAdding?'Add':'Edit'} User</h3>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
+                                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Password</label>
+                                <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={isEditing ? t('passwordPlaceholderEdit') : t('passwordPlaceholderAdd')} className="w-full border p-2 rounded" />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Name</label>
+                                <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Phone</label>
+                                <input type="text" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone" className="w-full border p-2 rounded" required />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Role</label>
+                                <select value={role} onChange={e=>handleRoleChange(e.target.value as UserRole)} className="w-full border p-2 rounded bg-white">
+                                    {roles.map(r=><option key={r} value={r}>{t(r)}</option>)}
+                                </select>
+                            </div>
+                            {isEditing && (
+                                <div className="col-span-1">
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Subscription Expiry</label>
+                                    <input 
+                                        type="date" 
+                                        value={expiryDate} 
+                                        onChange={e=>setExpiryDate(e.target.value)} 
+                                        className="w-full border p-2 rounded bg-white" 
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1">留白表示無期限或一般會員</p>
+                                </div>
+                            )}
+                        </div>
+                        {isEditing&&( 
+                            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
+                                <h4 className="font-bold text-green-800 mb-2">快速訂閱管理 (點擊以延長)</h4>
+                                <div className="flex gap-2 mb-3">
+                                    <button type="button" onClick={()=>handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+30 Days</button>
+                                    <button type="button" onClick={()=>handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+120 Days</button>
+                                    <button type="button" onClick={()=>handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+365 Days</button>
+                                </div>
+                                <div className="border-t border-green-200 pt-3">
+                                    <button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 font-bold flex items-center gap-1 disabled:opacity-50 hover:underline">
+                                        <EnvelopeIcon className="h-3 w-3" /> {sendingEmail?'發送中...':'📧 發送帳號狀態更新通知信'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                            <button type="button" onClick={resetForm} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">{t('cancel')}</button>
+                            <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold shadow-sm">{t('saveChanges')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+            {(success||error)&&<div className={`mt-4 p-4 rounded ${success?'bg-green-100 text-green-800':'bg-red-100 text-red-800'}`}>{success||error}</div>}
+          </div>
+        </div>
       </div>
+      {userToDelete && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"><div className="bg-white p-6 rounded shadow-lg"><h3>Confirm Delete?</h3><div className="flex gap-2 mt-4"><button onClick={()=>setUserToDelete(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button></div></div></div>}
     </div>
   );
 };
