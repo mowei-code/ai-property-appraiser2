@@ -57,7 +57,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const saveLocalUsers = (newUsers: User[]) => {
     try {
       localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(newUsers));
-      setUsers(newUsers);
+      // Only update state from local if we are NOT in cloud mode
+      if (!isSupabaseConfigured) {
+          setUsers(newUsers);
+      }
     } catch (e) {
       console.error("Failed to save users locally:", e);
     }
@@ -66,11 +69,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // [Helper] Fetch Users
   const fetchUsers = useCallback(async () => {
-    // 1. Local/Emergency Mode
+    // 1. Local/Emergency Mode (No Supabase)
     if (isFailsafeMode || !isSupabaseConfigured) {
-        console.log("[Auth] Fetching users from LocalStorage (Offline Mode)");
+        console.log("[Auth] Local Mode: Fetching from LocalStorage");
         let localData = getLocalUsers();
-        // Ensure admin sees themselves
+        // Ensure admin sees themselves in local mode
         if (currentUser && !localData.find(u => u.email === currentUser.email)) {
             localData.unshift(currentUser);
             saveLocalUsers(localData);
@@ -85,12 +88,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data, error } = await supabase.from('profiles').select('*');
         
         if (error) {
-            console.warn("[Auth] Supabase fetch error (RLS?):", error.message);
-            // DO NOT overwrite local data with empty if fetch failed.
-            // Just keep what we have or try to load from local cache as backup.
-            if (users.length === 0) {
-                setUsers(getLocalUsers());
-            }
+            console.error("[Auth] Supabase fetch error:", error.message);
+            // CRITICAL FIX: Do NOT fallback to local storage if API fails in cloud mode.
+            // This prevents "phantom users" (stale local data) from appearing in the admin panel.
+            // We set users to empty (or keep current) to reflect that we couldn't get DB data.
+            // setUsers([]); // Optional: clear list on error to indicate failure
             return;
         }
 
@@ -104,11 +106,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
 
-            // Update local cache with fresh cloud data
-            saveLocalUsers(mappedUsers);
+            // STRICT SOURCE OF TRUTH: Update state directly from DB
+            setUsers(mappedUsers);
+            
+            // We overwrite local storage just as a backup/cache, but we NEVER read from it in Cloud Mode.
+            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mappedUsers));
         }
     } catch (e) {
-        console.warn("[Auth] Fetch exception:", e);
+        console.error("[Auth] Fetch exception:", e);
     }
   }, [isFailsafeMode, currentUser]);
 
@@ -137,6 +142,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
                     });
                 } else {
+                    // Fallback if profile missing (shouldn't happen often)
                     setCurrentUser({ id: session.user.id, email: session.user.email!, role: '一般用戶' });
                 }
             }
@@ -224,8 +230,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 2. Real Supabase Login (Cloud Mode)
     try {
-        // REMOVED Promise.race timeout. Let Supabase handle connection time.
-        // This prevents the "Timeout" error on cold starts.
         const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
 
         if (error) {
@@ -284,7 +288,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       justRegistered.current = true; 
       
-      // Removed Timeout
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: details.email,
         password: details.password,
@@ -317,12 +320,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-      // Local Add Only (Client SDK restriction)
-      const localUsers = getLocalUsers();
-      if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'userExists' };
-      const newUser: User = { ...details, id: `local_${Date.now()}` };
-      saveLocalUsers([...localUsers, newUser]);
-      return { success: true, messageKey: 'userAdded' };
+      // Admin Add User Logic
+      if (isFailsafeMode || !isSupabaseConfigured) {
+          // Local Add
+          const localUsers = getLocalUsers();
+          if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' }; // User exists
+          const newUser: User = { ...details, id: `local_${Date.now()}` };
+          saveLocalUsers([...localUsers, newUser]);
+          return { success: true, messageKey: 'addUserSuccess' };
+      }
+
+      // Cloud Add - We typically use `signUp` but that logs the admin out.
+      // Supabase doesn't allow creating users directly from client SDK without admin API (service role).
+      // Since this is a client-side app, we guide the Admin to use "Invite" or just tell user to register.
+      // However, we can simulate it by just returning a message or using a secondary client if we had Service Role Key (we don't here).
+      return { success: false, messageKey: 'registrationFailed', message: '雲端模式下，請讓使用者自行註冊，或使用 Supabase Dashboard 新增。' };
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
@@ -369,12 +381,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           // ONLY update local state IF DB update was successful
-          const currentUsers = getLocalUsers();
-          const idx = currentUsers.findIndex(u => u.email === email);
-          if (idx !== -1) {
-              currentUsers[idx] = { ...currentUsers[idx], ...updates };
-              saveLocalUsers(currentUsers);
-          }
+          // We trigger a re-fetch to ensure sync
+          await fetchUsers();
+          
           if (currentUser?.email === email) {
               setCurrentUser({ ...currentUser, ...updates });
           }
@@ -402,9 +411,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return { success: false, messageKey: 'userDeleted', message: `資料庫刪除失敗: ${error.message}` };
           }
           
-          // Sync local state
-          const currentUsers = getLocalUsers().filter(u => u.email !== email);
-          saveLocalUsers(currentUsers);
+          await fetchUsers();
           
           return { success: true, messageKey: 'userDeleted' };
       } catch (e: any) {

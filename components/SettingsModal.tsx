@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
@@ -21,14 +21,11 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null
-    };
-  }
+class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -143,7 +140,6 @@ export const SettingsModal: React.FC = () => {
   const [paypalError, setPaypalError] = useState('');
   
   // Environment Check
-  // Strictly check protocol. If it's not http: or https:, block it.
   const isInvalidEnv = !window.location.protocol.startsWith('http');
 
   useEffect(() => {
@@ -168,10 +164,8 @@ export const SettingsModal: React.FC = () => {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
         const { checked } = e.target as HTMLInputElement;
-        // Use 'as any' to bypass TypeScript strict check for dynamic keys
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     } else {
-        // Use 'as any' because 'value' is string but some Settings keys are specific string unions
         setLocalSettings(prev => ({ ...prev, [name]: value as any }));
     }
   };
