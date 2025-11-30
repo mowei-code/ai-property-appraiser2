@@ -1,32 +1,67 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// 這些環境變數需要在您的專案根目錄下的 .env 檔案中設定 (本地開發)
-// 或是在 Vercel 的 Environment Variables 中設定 (線上部署)
-// 格式範例:
-// VITE_SUPABASE_URL=https://your-project-id.supabase.co
-// VITE_SUPABASE_ANON_KEY=your-anon-key
+// 輔助函式：安全地讀取環境變數 (支援 Vite 與 Node.js/Electron 環境)
+const getEnvVar = (key: string): string | undefined => {
+  try {
+    // 優先檢查 Vite 的 import.meta.env
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+  } catch (e) {
+    // 忽略存取錯誤
+  }
 
-// 使用 Optional Chaining (?.) 避免在某些環境下 import.meta.env 未定義導致崩潰
-const env = (import.meta as any).env || {};
-// 使用 trim() 去除可能不小心複製到的空白字元
-const supabaseUrl = (env.VITE_SUPABASE_URL || '').trim();
-const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+  try {
+    // 後備檢查 Node.js 的 process.env
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[key];
+    }
+  } catch (e) {
+    // 忽略存取錯誤
+  }
+  
+  return undefined;
+};
 
-// 匯出設定狀態供其他元件檢查
-// 只有當 URL 和 Key 都有值的時候，才視為已設定
-export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== 'https://placeholder.supabase.co';
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
-// Debug log for production diagnostics (這會顯示在瀏覽器的 Console 中，幫助您除錯)
+// 檢查是否已設定 Supabase 環境變數
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL';
+
 if (!isSupabaseConfigured) {
-  console.warn('⚠️ [Supabase] Missing Configuration. Running in Local Storage Fallback Mode.');
-  console.warn('Checks: URL present?', !!supabaseUrl, 'Key present?', !!supabaseAnonKey);
-} else {
-  console.log('✅ [Supabase] Configuration loaded. Connecting to:', supabaseUrl.substring(0, 15) + '...');
+  console.warn('Supabase credentials not found or invalid. App will run in local-only mode with limited functionality.');
 }
 
-// 若 URL 為空，使用 placeholder 防止 build time crash，但在使用時會報錯
-const validUrl = supabaseUrl || 'https://placeholder.supabase.co';
-const validKey = supabaseAnonKey || 'placeholder';
+// --- Singleton Pattern Implementation ---
+// 這是為了符合 Supabase 在 Vercel/Serverless 環境下的最佳實踐。
+// 避免因為 React HMR (熱重載) 或元件重新渲染而建立多個客戶端實例。
 
-export const supabase = createClient(validUrl, validKey);
+let supabaseInstance: SupabaseClient | null = null;
+
+const getSupabaseClient = () => {
+    if (supabaseInstance) return supabaseInstance;
+
+    if (isSupabaseConfigured) {
+        supabaseInstance = createClient(supabaseUrl!, supabaseAnonKey!, {
+            auth: {
+                persistSession: true, // 確保 session 在瀏覽器重整後保留
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            },
+            // 這裡可以加入 global fetch 設定來優化連線，例如設定 timeout
+            global: {
+                headers: { 'x-application-name': 'ai-property-appraiser' },
+            }
+        });
+    } else {
+        // 建立一個佔位符，防止未設定時報錯
+        supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
+    }
+    return supabaseInstance;
+};
+
+export const supabase = getSupabaseClient();

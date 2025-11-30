@@ -67,8 +67,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // [Helper] Fetch Users based on current mode
   const fetchUsers = useCallback(async () => {
     // 1. If currently in Emergency Mode (or no Supabase config), FORCE use LocalStorage.
-    // DO NOT attempt to fetch from Supabase, as it will likely return empty array (RLS) 
-    // and overwrite our valuable cache.
     if (isFailsafeMode || !isSupabaseConfigured) {
         console.log("[AuthContext] Fetching users from LocalStorage (Emergency/Offline Mode)");
         let localData = getLocalUsers();
@@ -87,7 +85,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
         const { data, error } = await supabase.from('profiles').select('*');
         
-        if (error) throw error;
+        if (error) {
+            console.warn("Supabase fetch error (RLS or Connection):", error.message);
+            // DO NOT CLEAR DATA. Keep existing data if fetch fails.
+            // Only update if we successfully got data.
+            return;
+        }
 
         if (data) {
             const mappedUsers: User[] = data.map((u: any) => ({
@@ -99,13 +102,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
 
-            // Sync Cloud Data to Local Cache for future emergencies
+            // Sync Cloud Data to Local Cache
             saveLocalUsers(mappedUsers);
         }
     } catch (e) {
-        console.warn("[AuthContext] Supabase fetch failed, falling back to local cache:", e);
-        // Fallback silently without switching mode drastically unless needed
-        setUsers(getLocalUsers());
+        console.warn("[AuthContext] Supabase fetch exception:", e);
+        // Fallback silently, keep current state
     }
   }, [isFailsafeMode, currentUser]);
 
@@ -135,7 +137,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         name: profile.name, phone: profile.phone, subscriptionExpiry: profile.subscription_expiry,
                     });
                 } else {
-                    // Fallback if profile missing (shouldn't happen often)
                     setCurrentUser({ id: session.user.id, email: session.user.email!, role: '一般用戶' });
                 }
             }
@@ -151,7 +152,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // [Listener] Supabase Auth State Changes
-  // Only active if NOT in Failsafe Mode
   useEffect(() => {
       if (isFailsafeMode || !isSupabaseConfigured) return;
 
@@ -202,15 +202,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              phone: '0900000000' 
          };
          
-         // Set State
          localStorage.setItem(EMERGENCY_ADMIN_KEY, JSON.stringify(adminUser));
-         setIsFailsafeMode(true); // Enable Failsafe Mode immediately
+         setIsFailsafeMode(true); 
          setCurrentUser(adminUser);
          setLoginModalOpen(false);
-         
-         // DO NOT call supabase.auth.signOut(). It might cause listeners to fire 'SIGNED_OUT'
-         // and we want to ignore Supabase completely in this mode.
-         
          return { success: true, messageKey: 'loginSuccess' };
     }
 
@@ -228,45 +223,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, messageKey: 'loginFailed' };
     }
 
-    // 2. Supabase Login
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-        // Suggest backdoor if DB issue detected for admin
-        if ((error.message.includes('Database') || error.message.includes('fetch')) && email === 'admin@mazylab.com') {
-             return { success: false, messageKey: 'loginFailed', message: "資料庫連線異常，請使用緊急密碼 'admin123' 登入。" };
+    // 2. Supabase Login with TIMEOUT PROTECTION
+    // 這是解決會員登入卡死最關鍵的一步。如果 Vercel/Supabase 回應超過 5 秒，強制報錯。
+    try {
+        const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
+            setTimeout(() => reject(new Error("Connection timed out. Please try again.")), 8000)
+        );
+
+        const loginPromise = supabase.auth.signInWithPassword({ email, password: pass });
+
+        const { error } = await Promise.race([loginPromise, timeoutPromise]) as any;
+
+        if (error) {
+            // Suggest backdoor if DB issue detected for admin
+            if ((error.message.includes('Database') || error.message.includes('fetch')) && email === 'admin@mazylab.com') {
+                 return { success: false, messageKey: 'loginFailed', message: "資料庫連線異常，請使用緊急密碼 'admin123' 登入。" };
+            }
+            return { success: false, messageKey: 'loginFailed', message: error.message };
         }
-        return { success: false, messageKey: 'loginFailed', message: error.message };
+        
+        // Login successful
+        setIsFailsafeMode(false); 
+        setLoginModalOpen(false);
+        return { success: true, messageKey: 'loginSuccess' };
+
+    } catch (e: any) {
+        console.error("Login exception:", e);
+        return { success: false, messageKey: 'loginFailed', message: e.message || "Network Error" };
     }
-    
-    // Login successful, listener will handle state update
-    setIsFailsafeMode(false); // Ensure we are in Cloud Mode
-    setLoginModalOpen(false);
-    return { success: true, messageKey: 'loginSuccess' };
   };
 
   const logout = async () => {
-    // 1. Clear Local State Immediately (The "Hard Logout")
     setCurrentUser(null);
     setUsers([]);
     setAdminPanelOpen(false);
-    setIsFailsafeMode(false); // Reset mode
+    setIsFailsafeMode(false);
     
-    // 2. Clear Persistence
     localStorage.removeItem(EMERGENCY_ADMIN_KEY);
     localStorage.removeItem('current_user');
 
-    // 3. Clear Supabase Session (Fire and Forget)
     if (isSupabaseConfigured) {
-        // We use catch() to prevent unhandled promise rejections if network is down
         supabase.auth.signOut().catch(() => {}); 
     }
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
-    // Validation
     if (!details.name.trim() || !details.phone.trim()) return { success: false, messageKey: 'missingRequiredFields' };
 
-    // Local Mode Register
     if (isFailsafeMode || !isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'registrationFailed' };
@@ -275,19 +278,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true, messageKey: 'registrationSuccess' };
     }
 
-    // Cloud Mode Register
     try {
       justRegistered.current = true; 
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      
+      // Add Timeout for Register too
+      const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
+            setTimeout(() => reject(new Error("Connection timed out.")), 8000)
+      );
+      const signUpPromise = supabase.auth.signUp({
         email: details.email,
         password: details.password,
         options: { data: { name: details.name, phone: details.phone } }
       });
 
+      const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]) as any;
+
       if (signUpError) throw signUpError;
 
       if (data.user) {
-        // Create Profile
         await supabase.from('profiles').upsert([{
             id: data.user.id,
             email: details.email,
@@ -297,7 +305,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             updated_at: new Date().toISOString(),
         }]);
         
-        // Auto logout to require fresh login
         if (data.session) supabase.auth.signOut(); 
         
         return { success: true, messageKey: 'registrationSuccess' };
@@ -316,9 +323,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'userExists' };
       const newUser: User = { ...details, id: `local_${Date.now()}` };
       saveLocalUsers([...localUsers, newUser]);
-      
-      // We don't support creating new Supabase users via client SDK (requires Admin API).
-      // So we rely on local addition for UI feedback.
       return { success: true, messageKey: 'userAdded' };
   };
 
@@ -330,19 +334,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           currentUsers[idx] = { ...currentUsers[idx], ...updates };
           saveLocalUsers(currentUsers);
       } else if (currentUser?.email === email) {
-          // If updating self but not in list (e.g. initial admin)
           const updatedSelf = { ...currentUser, ...updates };
           setCurrentUser(updatedSelf);
       }
 
-      // 2. If Emergency Mode, stop here.
       if (isFailsafeMode || !isSupabaseConfigured) {
           return { success: true, messageKey: 'userUpdated' };
       }
 
-      // 3. Try Supabase Update
+      // 2. Try Supabase Update
       try {
-          // Find ID
           let targetId = idx !== -1 ? currentUsers[idx].id : null;
           if (!targetId || targetId.startsWith('local_')) {
                const { data } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
@@ -377,12 +378,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { success: true, messageKey: 'userDeleted' };
       }
 
-      // 2. If Emergency Mode, stop here.
       if (isFailsafeMode || !isSupabaseConfigured) {
           return { success: true, messageKey: 'userDeleted' };
       }
 
-      // 3. Try Supabase Delete
+      // 2. Try Supabase Delete
       try {
           const { error } = await supabase.from('profiles').delete().eq('email', email);
           if (error) console.warn("Supabase delete failed (likely RLS), but local user removed:", error);
