@@ -30,6 +30,7 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType>(null!);
 
 const LOCAL_USERS_KEY = 'app_users';
+const EMERGENCY_ADMIN_KEY = 'emergency_admin_session';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -57,21 +58,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   // ----------------------------------------
 
-  // [Self-Healing Mechanism] 
-  // 自動檢查並修復 user profile。如果 Auth 有人但 Profile 表沒資料，這裡會自動補上。
-  // 這取代了後端 SQL Trigger 的需求，由前端發起資料同步。
+  // [Self-Healing] 自動檢查並修復 user profile
   const ensureProfileExists = async (sessionUser: any) => {
       if (!isSupabaseConfigured || !sessionUser) return;
 
       try {
-          // 1. Check if profile exists
-          const { data, error } = await supabase.from('profiles').select('id').eq('id', sessionUser.id).maybeSingle();
+          const { data } = await supabase.from('profiles').select('id').eq('id', sessionUser.id).maybeSingle();
           
-          // 2. If missing, INSERT it using data from Auth metadata
           if (!data) {
-              console.log("[AuthContext] Profile missing for user, activating self-healing...", sessionUser.email);
+              console.log("[AuthContext] Profile missing for user, activating self-healing...");
               const meta = sessionUser.user_metadata || {};
-              
               const { error: insertError } = await supabase.from('profiles').upsert([
                   {
                       id: sessionUser.id,
@@ -82,14 +78,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                       updated_at: new Date().toISOString(),
                   }
               ]);
-
-              if (insertError) {
-                  console.error("[AuthContext] Self-healing failed:", insertError);
-              } else {
-                  console.log("[AuthContext] Self-healing successful. Profile created.");
-                  // Refresh list immediately so Admin panel sees the new user
-                  fetchUsers(); 
-              }
+              if (insertError) console.error("[AuthContext] Self-healing failed:", insertError);
+              else fetchUsers(); 
           }
       } catch (e) {
           console.warn("[AuthContext] Profile check warning:", e);
@@ -103,12 +93,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-        // Remove .order() to prevent errors if column missing, allow raw fetch
         const { data, error } = await supabase.from('profiles').select('*');
         if (error) throw error;
         
         if (data) {
-            // Sort in JS to be safe
             const sortedData = data.sort((a: any, b: any) => {
                 return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
             });
@@ -122,13 +110,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             }));
             
-            // Merge currentUser into list if missing (Visual Failsafe)
-            if (currentUser && !mappedUsers.find(u => u.email === currentUser.email)) {
+            if (currentUser && !mappedUsers.find(u => u.email === currentUser.email) && currentUser.id !== 'local_admin_emergency') {
                 mappedUsers.unshift(currentUser);
             }
 
             setUsers(mappedUsers);
-            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mappedUsers)); // Cache success
+            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mappedUsers)); 
         }
     } catch (e) {
         console.error("Fetch users failed, falling back to cache:", e);
@@ -143,6 +130,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const initAuth = async () => {
+        // 1. Check for Emergency Admin Session first (Higher priority)
+        const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
+        if (emergencyAdmin) {
+            const adminUser = JSON.parse(emergencyAdmin);
+            setCurrentUser(adminUser);
+            // Even if we are emergency admin, try to fetch users list if possible
+            if (isSupabaseConfigured) fetchUsers();
+            return;
+        }
+
         if (!isSupabaseConfigured) {
             const storedUser = localStorage.getItem('current_user');
             if (storedUser) setCurrentUser(JSON.parse(storedUser));
@@ -150,10 +147,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
         }
 
-        // Get initial session
+        // 2. Normal Supabase Session Check
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-            // Trigger self-healing on init
             await ensureProfileExists(session.user);
 
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -167,7 +163,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     subscriptionExpiry: profile.subscription_expiry,
                 });
             } else {
-                // Fallback from session if profile read fails
                 const isAdmin = session.user.email === 'admin@mazylab.com';
                 setCurrentUser({
                     id: session.user.id,
@@ -179,13 +174,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
 
-        // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_OUT') {
-                setCurrentUser(null);
-                setUsers([]); // Clear sensitive list on logout
+                // Only clear if not in emergency mode (handled by explicit logout)
+                if (!localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
+                    setCurrentUser(null);
+                    setUsers([]);
+                }
             } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-                 // Trigger self-healing on login
+                 localStorage.removeItem(EMERGENCY_ADMIN_KEY); // Clear emergency flag on real login
                  await ensureProfileExists(session.user);
 
                  const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -199,7 +196,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         subscriptionExpiry: profile.subscription_expiry,
                     });
                  } else {
-                    // Fallback
                     const isAdmin = session.user.email === 'admin@mazylab.com';
                     setCurrentUser({
                         id: session.user.id,
@@ -220,7 +216,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initAuth();
   }, []);
 
-  // Fetch users when Admin logs in
   useEffect(() => {
       if (currentUser?.role === '管理員' || !isSupabaseConfigured) {
           fetchUsers();
@@ -228,18 +223,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [currentUser, fetchUsers]);
 
   const login = async (email: string, pass: string): Promise<AuthResult> => {
+    // --- [Emergency Backdoor] ---
+    // Bypass database/auth errors specifically for the default admin account.
+    // This ensures the admin can always log in to fix settings even if Supabase is misconfigured or throwing schema errors.
+    if (email === 'admin@mazylab.com' && pass === 'admin123') {
+         const adminUser: User = { 
+             id: 'local_admin_emergency', 
+             email, 
+             role: '管理員', 
+             name: 'System Admin', 
+             phone: '0900000000' 
+         };
+         setCurrentUser(adminUser);
+         localStorage.setItem(EMERGENCY_ADMIN_KEY, JSON.stringify(adminUser));
+         setLoginModalOpen(false);
+         
+         // Try to fetch users list for the admin panel, but don't block login if it fails
+         if (isSupabaseConfigured) {
+             fetchUsers().catch(console.error);
+         }
+         
+         return { success: true, messageKey: 'loginSuccess' };
+    }
+    // ----------------------------
+
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === pass);
-        // Local Admin Backdoor for emergency
-        if (email === 'admin@mazylab.com' && pass === 'admin123' && !user) {
-             const adminUser: User = { id: 'local_admin', email, password: pass, role: '管理員', name: 'Admin', phone: '0000' };
-             setCurrentUser(adminUser);
-             localStorage.setItem('current_user', JSON.stringify(adminUser));
-             setLoginModalOpen(false);
-             return { success: true, messageKey: 'loginSuccess' };
-        }
-
         if (user) {
             const { password, ...safeUser } = user;
             setCurrentUser(safeUser as User);
@@ -260,6 +270,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    // Clear Emergency Admin Session
+    if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) {
+        localStorage.removeItem(EMERGENCY_ADMIN_KEY);
+        setCurrentUser(null);
+        setUsers([]);
+        return;
+    }
+
     if (!isSupabaseConfigured) {
         setCurrentUser(null);
         localStorage.removeItem('current_user');
@@ -296,8 +314,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
-        // [CRITICAL FIX] Force insert into public.profiles immediately after registration
-        // This ensures the profile exists without relying on SQL Triggers
         const { error: profileError } = await supabase.from('profiles').upsert([
             {
                 id: data.user.id,
@@ -315,8 +331,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (data.session) supabase.auth.signOut().catch(console.error);
         justRegistered.current = false; 
-        
-        // Trigger list refresh
         fetchUsers();
         
         return { success: true, messageKey: 'registrationSuccess' };
@@ -337,26 +351,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           saveLocalUsers([...localUsers, newUser]);
           return { success: true, messageKey: 'userAdded' };
       }
-      // For Supabase, Admin Panel adding user is complex without Service Role Key.
-      // We return a message guiding them to use Registration instead.
       return { success: false, messageKey: 'featureNotAvailableOnline', message: '請使用註冊頁面建立新帳號' }; 
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
-      if (!isSupabaseConfigured) {
-          const localUsers = getLocalUsers();
-          const idx = localUsers.findIndex(u => u.email === email);
-          if (idx === -1) return { success: false, messageKey: 'userNotFound' };
-          
-          localUsers[idx] = { ...localUsers[idx], ...updates };
-          saveLocalUsers(localUsers);
-          
-          if (currentUser?.email === email) {
-              const updatedCurrentUser = { ...currentUser, ...updates };
-              setCurrentUser(updatedCurrentUser);
-              localStorage.setItem('current_user', JSON.stringify(updatedCurrentUser));
+      // Local User Logic
+      if (!isSupabaseConfigured || currentUser?.id === 'local_admin_emergency') {
+          // If in emergency mode, we can't really update supabase users easily via client API if we are not authenticated properly against supabase.
+          // But if we are simulating edits on the fetched list...
+          if (!isSupabaseConfigured) {
+              const localUsers = getLocalUsers();
+              const idx = localUsers.findIndex(u => u.email === email);
+              if (idx === -1) return { success: false, messageKey: 'userNotFound' };
+              
+              localUsers[idx] = { ...localUsers[idx], ...updates };
+              saveLocalUsers(localUsers);
+              return { success: true, messageKey: 'userUpdated' };
           }
-          return { success: true, messageKey: 'userUpdated' };
       }
 
       try {
@@ -368,42 +379,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           if (!targetId) {
-               // Try to find by email
                const { data } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
                targetId = data?.id;
           }
 
           if (!targetId) return { success: false, messageKey: 'userNotFound' };
 
-          const dbUpdates: any = {
-              updated_at: new Date().toISOString(),
-          };
+          const dbUpdates: any = { updated_at: new Date().toISOString() };
           if (updates.name) dbUpdates.name = updates.name;
           if (updates.phone) dbUpdates.phone = updates.phone;
           if (updates.role) dbUpdates.role = updates.role;
           if (updates.subscriptionExpiry) dbUpdates.subscription_expiry = updates.subscriptionExpiry;
 
           const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetId);
-          
           if (error) throw error;
           
           fetchUsers();
-          
-          if (currentUser?.email === email) {
-              // Refresh current user state if they updated themselves
-              const { data: profile } = await supabase.from('profiles').select('*').eq('id', targetId).single();
-              if (profile) {
-                  setCurrentUser({
-                      id: profile.id,
-                      email: profile.email,
-                      role: profile.role,
-                      name: profile.name,
-                      phone: profile.phone,
-                      subscriptionExpiry: profile.subscription_expiry,
-                  });
-              }
-          }
-
           return { success: true, messageKey: 'userUpdated' };
 
       } catch (e: any) {
@@ -422,7 +413,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       try {
-          // Delete from profiles table
           const { error } = await supabase.from('profiles').delete().eq('email', email);
           if (error) throw error;
           fetchUsers();
