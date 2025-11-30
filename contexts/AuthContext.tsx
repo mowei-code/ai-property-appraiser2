@@ -120,6 +120,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // 1. Check Emergency Session FIRST
         const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
         if (emergencyAdmin) {
+            // Note: If Supabase is actually configured, we should probably warn or try to re-auth,
+            // but for now we respect the stored session to prevent loop. 
+            // User can logout to clear this.
             console.log("[Auth] Restoring Emergency Session");
             const adminUser = JSON.parse(emergencyAdmin);
             setCurrentUser(adminUser);
@@ -194,24 +197,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const email = emailInput.trim().toLowerCase();
     const pass = passInput.trim();
 
-    // 1. Emergency Backdoor (Offline Mode)
-    if (email === 'admin@mazylab.com' && pass === 'admin123') {
-         const adminUser: User = { 
-             id: 'local_admin_emergency', 
-             email, 
-             role: '管理員', 
-             name: 'System Admin (Offline)', 
-             phone: '0900000000' 
-         };
-         
-         localStorage.setItem(EMERGENCY_ADMIN_KEY, JSON.stringify(adminUser));
-         setIsFailsafeMode(true); 
-         setCurrentUser(adminUser);
-         setLoginModalOpen(false);
-         alert("您已進入「離線緊急管理模式」。\n在此模式下所做的變更僅存於本地瀏覽器，不會同步至資料庫。");
-         return { success: true, messageKey: 'loginSuccess' };
+    // 1. Supabase Login (Standard Flow)
+    // If Supabase is configured, we ALWAYS try to authenticate with it.
+    // There are NO hardcoded backdoors here anymore.
+    if (isSupabaseConfigured) {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+
+            if (error) {
+                console.error("Supabase login error:", error.message);
+                return { success: false, messageKey: 'loginFailed', message: error.message };
+            }
+
+            if (data.user) {
+                // Success: Cloud Mode
+                setIsFailsafeMode(false);
+                setLoginModalOpen(false);
+                localStorage.removeItem(EMERGENCY_ADMIN_KEY); // Clean up any previous emergency flags
+                return { success: true, messageKey: 'loginSuccess' };
+            }
+        } catch (e: any) {
+            console.error("Login network exception:", e);
+            return { success: false, messageKey: 'loginFailed', message: e.message || "Network Error" };
+        }
     }
 
+    // 2. Local Mode (Only reachable if Supabase is NOT configured via .env)
+    // This is for pure local development or demo purposes without a backend.
     if (!isSupabaseConfigured) {
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === pass);
@@ -225,23 +237,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, messageKey: 'loginFailed' };
     }
 
-    // 2. Real Supabase Login (Cloud Mode)
-    try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-
-        if (error) {
-            return { success: false, messageKey: 'loginFailed', message: error.message };
-        }
-        
-        // Success
-        setIsFailsafeMode(false); 
-        setLoginModalOpen(false);
-        return { success: true, messageKey: 'loginSuccess' };
-
-    } catch (e: any) {
-        console.error("Login exception:", e);
-        return { success: false, messageKey: 'loginFailed', message: e.message || "Network Error" };
-    }
+    return { success: false, messageKey: 'loginFailed', message: '未知錯誤' };
   };
 
   const logout = async () => {
