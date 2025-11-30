@@ -38,7 +38,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
   
-  // State to track if we are in "Emergency/Local Mode" vs "Real Cloud Mode"
+  // Failsafe Mode = TRUE means we are using "admin123" or offline mode. 
+  // We CANNOT write to Supabase in this mode.
   const [isFailsafeMode, setIsFailsafeMode] = useState(false);
   
   const justRegistered = useRef(false);
@@ -64,14 +65,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   // ----------------------------------------
 
-  // [Helper] Fetch Users based on current mode
+  // [Helper] Fetch Users
   const fetchUsers = useCallback(async () => {
-    // 1. If currently in Emergency Mode (or no Supabase config), FORCE use LocalStorage.
+    // 1. Local/Emergency Mode
     if (isFailsafeMode || !isSupabaseConfigured) {
-        console.log("[AuthContext] Fetching users from LocalStorage (Emergency/Offline Mode)");
+        console.log("[Auth] Fetching users from LocalStorage (Offline Mode)");
         let localData = getLocalUsers();
-        
-        // Ensure the current admin is in the list so they don't lock themselves out visually
+        // Ensure admin sees themselves
         if (currentUser && !localData.find(u => u.email === currentUser.email)) {
             localData.unshift(currentUser);
             saveLocalUsers(localData);
@@ -81,14 +81,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
     }
 
-    // 2. Cloud Mode: Try Supabase
+    // 2. Cloud Mode (Real Admin)
     try {
+        // We try to fetch from Supabase. 
+        // Note: Unless the logged-in user is a SUPER ADMIN in Supabase or RLS allows 'select *',
+        // this might return only the user's own profile.
         const { data, error } = await supabase.from('profiles').select('*');
         
         if (error) {
-            console.warn("Supabase fetch error (RLS or Connection):", error.message);
-            // DO NOT CLEAR DATA. Keep existing data if fetch fails.
-            // Only update if we successfully got data.
+            console.warn("[Auth] Supabase fetch error (RLS):", error.message);
+            // Fallback: If we can't fetch the list (due to RLS), show local cache
+            // giving the admin at least *something* to look at.
+            setUsers(getLocalUsers()); 
             return;
         }
 
@@ -102,12 +106,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 subscriptionExpiry: u.subscription_expiry,
             })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
 
-            // Sync Cloud Data to Local Cache
+            // Update local cache with fresh cloud data
             saveLocalUsers(mappedUsers);
         }
     } catch (e) {
-        console.warn("[AuthContext] Supabase fetch exception:", e);
-        // Fallback silently, keep current state
+        console.warn("[Auth] Fetch exception:", e);
+        setUsers(getLocalUsers());
     }
   }, [isFailsafeMode, currentUser]);
 
@@ -117,18 +121,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // 1. Check Emergency Session FIRST
         const emergencyAdmin = localStorage.getItem(EMERGENCY_ADMIN_KEY);
         if (emergencyAdmin) {
-            console.log("[AuthContext] Restoring Emergency Session");
+            console.log("[Auth] Restoring Emergency Session");
             const adminUser = JSON.parse(emergencyAdmin);
             setCurrentUser(adminUser);
-            setIsFailsafeMode(true); // LOCK into Failsafe Mode
-            return; // STOP here. Do not initialize Supabase listener.
+            setIsFailsafeMode(true);
+            return; 
         }
 
-        // 2. If no emergency session, check Supabase
+        // 2. Check Supabase Session
         if (isSupabaseConfigured) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                // We have a real user
+                // Real Cloud Login
                 setIsFailsafeMode(false);
                 const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
                 if (profile) {
@@ -141,7 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
         } else {
-            // No Supabase config at all
+            // No Supabase Config -> Force Local Mode
             setIsFailsafeMode(true);
             const storedUser = localStorage.getItem('current_user');
             if (storedUser) setCurrentUser(JSON.parse(storedUser));
@@ -156,7 +160,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (isFailsafeMode || !isSupabaseConfigured) return;
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) return; // Double check guard
+          if (localStorage.getItem(EMERGENCY_ADMIN_KEY)) return; 
 
           if (event === 'SIGNED_OUT') {
               setCurrentUser(null);
@@ -178,7 +182,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
   }, [isFailsafeMode, fetchUsers]);
 
-  // [Effect] Refresh list when user changes or mode changes
   useEffect(() => {
       if (currentUser?.role === '管理員') {
           fetchUsers();
@@ -192,13 +195,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const email = emailInput.trim().toLowerCase();
     const pass = passInput.trim();
 
-    // 1. Emergency Backdoor
+    // 1. Emergency Backdoor (Offline Mode)
     if (email === 'admin@mazylab.com' && pass === 'admin123') {
          const adminUser: User = { 
              id: 'local_admin_emergency', 
              email, 
              role: '管理員', 
-             name: 'System Admin (Emergency)', 
+             name: 'System Admin (Offline)', 
              phone: '0900000000' 
          };
          
@@ -206,11 +209,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          setIsFailsafeMode(true); 
          setCurrentUser(adminUser);
          setLoginModalOpen(false);
+         // Explicit warning
+         alert("您已進入「離線緊急管理模式」。\n在此模式下所做的變更僅存於本地瀏覽器，不會同步至資料庫。");
          return { success: true, messageKey: 'loginSuccess' };
     }
 
     if (!isSupabaseConfigured) {
-        // Pure Local Mode
         const localUsers = getLocalUsers();
         const user = localUsers.find(u => u.email === email && u.password === pass);
         if (user) {
@@ -223,11 +227,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, messageKey: 'loginFailed' };
     }
 
-    // 2. Supabase Login with TIMEOUT PROTECTION
-    // 這是解決會員登入卡死最關鍵的一步。如果 Vercel/Supabase 回應超過 5 秒，強制報錯。
+    // 2. Real Supabase Login (Cloud Mode)
     try {
         const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
-            setTimeout(() => reject(new Error("Connection timed out. Please try again.")), 8000)
+            setTimeout(() => reject(new Error("連線逾時。請檢查網路或稍後再試。")), 10000)
         );
 
         const loginPromise = supabase.auth.signInWithPassword({ email, password: pass });
@@ -235,14 +238,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { error } = await Promise.race([loginPromise, timeoutPromise]) as any;
 
         if (error) {
-            // Suggest backdoor if DB issue detected for admin
             if ((error.message.includes('Database') || error.message.includes('fetch')) && email === 'admin@mazylab.com') {
-                 return { success: false, messageKey: 'loginFailed', message: "資料庫連線異常，請使用緊急密碼 'admin123' 登入。" };
+                 return { success: false, messageKey: 'loginFailed', message: "資料庫連線異常。請使用 'admin123' 進入離線模式。" };
             }
             return { success: false, messageKey: 'loginFailed', message: error.message };
         }
         
-        // Login successful
+        // Success
         setIsFailsafeMode(false); 
         setLoginModalOpen(false);
         return { success: true, messageKey: 'loginSuccess' };
@@ -254,17 +256,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    setCurrentUser(null);
-    setUsers([]);
-    setAdminPanelOpen(false);
-    setIsFailsafeMode(false);
+    // FORCE RELOAD APPROACH
+    // This is the only way to guarantee a clean slate and prevent the "Login Freeze" issue
+    // caused by lingering Supabase states or React Context race conditions.
     
+    // 1. Clear Local Storage
     localStorage.removeItem(EMERGENCY_ADMIN_KEY);
     localStorage.removeItem('current_user');
-
-    if (isSupabaseConfigured) {
-        supabase.auth.signOut().catch(() => {}); 
+    // We intentionally keep 'app_users' (cache) so the next page load isn't empty immediately
+    
+    // 2. Try async signout (fire and forget)
+    if (isSupabaseConfigured && !isFailsafeMode) {
+        try {
+            await supabase.auth.signOut(); 
+        } catch (e) {
+            console.warn("Supabase signout weak error:", e);
+        }
     }
+
+    // 3. HARD RESET
+    // Reload the page to clear memory state
+    window.location.reload();
   };
 
   const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
@@ -281,9 +293,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       justRegistered.current = true; 
       
-      // Add Timeout for Register too
       const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) => 
-            setTimeout(() => reject(new Error("Connection timed out.")), 8000)
+            setTimeout(() => reject(new Error("Connection timed out.")), 10000)
       );
       const signUpPromise = supabase.auth.signUp({
         email: details.email,
@@ -305,7 +316,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             updated_at: new Date().toISOString(),
         }]);
         
-        if (data.session) supabase.auth.signOut(); 
+        if (data.session) await supabase.auth.signOut(); 
         
         return { success: true, messageKey: 'registrationSuccess' };
       }
@@ -318,7 +329,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-      // Always add to Local Cache first (Optimistic)
+      // Offline/Optimistic Add
       const localUsers = getLocalUsers();
       if (localUsers.some(u => u.email === details.email)) return { success: false, messageKey: 'userExists' };
       const newUser: User = { ...details, id: `local_${Date.now()}` };
@@ -327,49 +338,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
-      // 1. Optimistic Local Update
+      // 1. Always update Local UI first (Optimistic)
       const currentUsers = getLocalUsers();
       const idx = currentUsers.findIndex(u => u.email === email);
       if (idx !== -1) {
           currentUsers[idx] = { ...currentUsers[idx], ...updates };
           saveLocalUsers(currentUsers);
-      } else if (currentUser?.email === email) {
-          const updatedSelf = { ...currentUser, ...updates };
-          setCurrentUser(updatedSelf);
+      }
+      if (currentUser?.email === email) {
+          setCurrentUser({ ...currentUser, ...updates });
       }
 
-      if (isFailsafeMode || !isSupabaseConfigured) {
-          return { success: true, messageKey: 'userUpdated' };
+      // 2. CHECK MODE
+      if (isFailsafeMode) {
+          // If in Emergency Mode, we CANNOT update Supabase.
+          // Warning explicitly.
+          return { success: true, messageKey: 'userUpdated', message: "已更新本地顯示 (離線模式無法寫入資料庫)" };
       }
 
-      // 2. Try Supabase Update
+      if (!isSupabaseConfigured) return { success: true, messageKey: 'userUpdated' };
+
+      // 3. Cloud Update
       try {
-          let targetId = idx !== -1 ? currentUsers[idx].id : null;
-          if (!targetId || targetId.startsWith('local_')) {
-               const { data } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-               targetId = data?.id;
+          // Find target ID from DB (to avoid using local ID)
+          const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+          
+          if (!targetUser) {
+              return { success: false, messageKey: 'userNotFound', message: "雲端資料庫找不到此用戶，無法同步更新。" };
           }
 
-          if (targetId && !targetId.startsWith('local_')) {
-              const dbUpdates: any = { updated_at: new Date().toISOString() };
-              if (updates.name) dbUpdates.name = updates.name;
-              if (updates.phone) dbUpdates.phone = updates.phone;
-              if (updates.role) dbUpdates.role = updates.role;
-              if (updates.subscriptionExpiry) dbUpdates.subscription_expiry = updates.subscriptionExpiry;
+          const dbUpdates: any = { updated_at: new Date().toISOString() };
+          if (updates.name) dbUpdates.name = updates.name;
+          if (updates.phone) dbUpdates.phone = updates.phone;
+          if (updates.role) dbUpdates.role = updates.role;
+          if (updates.subscriptionExpiry) dbUpdates.subscription_expiry = updates.subscriptionExpiry;
 
-              const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetId);
-              if (error) throw error;
+          const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
+          
+          if (error) {
+              console.error("Supabase update error:", error);
+              // Important: If RLS blocks it, we tell the user.
+              return { success: false, messageKey: 'updateUserSuccess', message: `資料庫更新失敗 (權限不足?): ${error.message}` };
           }
-          return { success: true, messageKey: 'userUpdated' };
+
+          return { success: true, messageKey: 'userUpdated', message: "雲端資料庫更新成功！" };
+
       } catch (e: any) {
-          console.error("Supabase update failed:", e);
-          // Return success anyway because local update succeeded
-          return { success: true, messageKey: 'userUpdated' }; 
+          console.error("Supabase exception:", e);
+          return { success: false, messageKey: 'userUpdated', message: "發生未預期的錯誤，僅更新本地顯示。" };
       }
   };
 
   const deleteUser = async (email: string): Promise<AuthResult> => {
-      // 1. Optimistic Local Delete
+      // 1. Local Delete
       const currentUsers = getLocalUsers().filter(u => u.email !== email);
       saveLocalUsers(currentUsers);
 
@@ -379,17 +400,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (isFailsafeMode || !isSupabaseConfigured) {
-          return { success: true, messageKey: 'userDeleted' };
+          return { success: true, messageKey: 'userDeleted', message: "僅從本地列表移除 (離線模式)" };
       }
 
-      // 2. Try Supabase Delete
+      // 2. Cloud Delete
       try {
           const { error } = await supabase.from('profiles').delete().eq('email', email);
-          if (error) console.warn("Supabase delete failed (likely RLS), but local user removed:", error);
+          if (error) {
+              return { success: false, messageKey: 'userDeleted', message: `資料庫刪除失敗: ${error.message}` };
+          }
           return { success: true, messageKey: 'userDeleted' };
       } catch (e: any) {
-          console.error("Delete failed:", e);
-          return { success: true, messageKey: 'userDeleted' }; 
+          return { success: false, messageKey: 'userDeleted', message: e.message };
       }
   };
 
