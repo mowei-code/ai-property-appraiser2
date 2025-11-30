@@ -222,16 +222,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
   }, [currentUser, fetchUsers]);
 
-  const login = async (email: string, pass: string): Promise<AuthResult> => {
-    // --- [Emergency Backdoor] ---
-    // Bypass database/auth errors specifically for the default admin account.
-    // This ensures the admin can always log in to fix settings even if Supabase is misconfigured or throwing schema errors.
+  const login = async (emailInput: string, passInput: string): Promise<AuthResult> => {
+    // Clean inputs
+    const email = emailInput.trim().toLowerCase();
+    const pass = passInput.trim();
+
+    // --- [Emergency Admin Backdoor] ---
+    // Bypass EVERYTHING if these credentials match. 
+    // This allows entry even if Supabase triggers/schema are 100% broken.
     if (email === 'admin@mazylab.com' && pass === 'admin123') {
+         console.log("Emergency Admin Login Activated");
          const adminUser: User = { 
              id: 'local_admin_emergency', 
              email, 
              role: '管理員', 
-             name: 'System Admin', 
+             name: 'System Admin (Emergency)', 
              phone: '0900000000' 
          };
          setCurrentUser(adminUser);
@@ -262,6 +267,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
+        // Helpful error override for the specific schema issue user is facing
+        if (error.message.includes('Database error querying schema') || error.message.includes('Database error')) {
+            if (email === 'admin@mazylab.com') {
+                return { 
+                    success: false, 
+                    messageKey: 'loginFailed', 
+                    message: "資料庫結構異常。請使用緊急密碼 'admin123' 強制登入後台。" 
+                };
+            }
+        }
         return { success: false, messageKey: 'loginFailed', message: error.message };
     }
     
