@@ -518,15 +518,15 @@ export const AdminPanel: React.FC = () => {
                       資料庫修復指令 (SQL Setup) - 加強版
                   </h3>
                   <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                      <p>請複製下方<strong>最新版本</strong>的代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
-                      <p className="text-red-600 dark:text-red-400 font-bold">此版本增加了權限授權 (GRANT) 與路徑設定，能解決「權限不足」或「找不到資料表」的頑固問題。</p>
+                      <p>請複製下方<strong>V3 終極版</strong>代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
+                      <p className="text-red-600 dark:text-red-400 font-bold">此版本會強制補齊缺少的欄位，並鎖定執行路徑，徹底解決寫入失敗問題。</p>
                   </div>
                   <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
 {`-- 1. Reset Triggers & Functions (清理舊設定)
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 2. Ensure Table Exists (確保資料表)
+-- 2. Ensure Table Exists & Has Correct Columns (確保資料表與欄位存在)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
   email text,
@@ -536,6 +536,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   subscription_expiry timestamptz,
   updated_at timestamptz
 );
+
+-- Force add columns if they are missing (Fix for existing tables)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text DEFAULT '一般用戶';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expiry timestamptz;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 
 -- 3. Grants (關鍵：修復權限問題)
 GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
