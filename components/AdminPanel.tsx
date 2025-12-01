@@ -40,16 +40,26 @@ export const AdminPanel: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   
   // Settings State
-  const [paypalClientId, setPaypalClientId] = useState(settings.paypalClientId || '');
-  const [systemEmail, setSystemEmail] = useState(settings.systemEmail || '');
-  const [smtpHost, setSmtpHost] = useState(settings.smtpHost || '');
-  const [smtpPort, setSmtpPort] = useState(settings.smtpPort || '587');
-  const [smtpUser, setSmtpUser] = useState(settings.smtpUser || '');
-  const [smtpPass, setSmtpPass] = useState(settings.smtpPass || '');
+  const [paypalClientId, setPaypalClientId] = useState('');
+  const [systemEmail, setSystemEmail] = useState('');
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
   const [configSuccess, setConfigSuccess] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
   const roles: UserRole[] = ['管理員', '一般用戶', '付費用戶'];
+
+  // Update local state when settings change
+  useEffect(() => {
+      setPaypalClientId(settings.paypalClientId || '');
+      setSystemEmail(settings.systemEmail || '');
+      setSmtpHost(settings.smtpHost || '');
+      setSmtpPort(settings.smtpPort || '587');
+      setSmtpUser(settings.smtpUser || '');
+      setSmtpPass(settings.smtpPass || '');
+  }, [settings]);
 
   useEffect(() => {
       if (isSupabaseConfigured) {
@@ -71,15 +81,6 @@ export const AdminPanel: React.FC = () => {
       }
     }
   }, [isEditing]);
-  
-  useEffect(() => {
-      setPaypalClientId(settings.paypalClientId || '');
-      setSystemEmail(settings.systemEmail || '');
-      setSmtpHost(settings.smtpHost || '');
-      setSmtpPort(settings.smtpPort || '587');
-      setSmtpUser(settings.smtpUser || '');
-      setSmtpPass(settings.smtpPass || '');
-  }, [settings]);
 
   const resetForm = () => {
     setIsAdding(false);
@@ -320,7 +321,7 @@ export const AdminPanel: React.FC = () => {
       reader.readAsText(file);
   };
 
-  // --- CRITICAL BLOCKER: If Supabase is NOT connected, show setup guide only ---
+  // --- Supabase Connection Block ---
   if (!isSupabaseConfigured) {
       return (
         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
@@ -330,7 +331,6 @@ export const AdminPanel: React.FC = () => {
                 <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md">
                     系統偵測到 Supabase 環境變數遺失或設定錯誤。為了避免資料錯誤，管理後台已暫時鎖定。
                 </p>
-                
                 <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg w-full text-left mb-6 font-mono text-sm overflow-x-auto">
                     <p className="text-gray-500 mb-2">// 請在專案根目錄建立 .env 檔案並填入：</p>
                     <div className="text-blue-600 dark:text-blue-400">
@@ -338,7 +338,6 @@ export const AdminPanel: React.FC = () => {
                         VITE_SUPABASE_ANON_KEY=您的Supabase_Anon_Key
                     </div>
                 </div>
-
                 <div className="flex gap-4">
                     <button onClick={forceReconnect} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2">
                         <ArrowPathIcon className="h-5 w-5" /> 重新偵測連線
@@ -365,19 +364,10 @@ export const AdminPanel: React.FC = () => {
                 <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
                     <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
                     
-                    {/* Supabase Status Indicator (Connected State) */}
                     <div className="mb-4 p-3 rounded-lg border bg-green-100 border-green-200 text-green-800">
                         <div className="flex items-center gap-2 font-bold text-sm">
                             <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
                             <span>雲端資料庫 (連線正常)</span>
-                        </div>
-                        <div className="mt-3 border-t border-black/10 pt-2">
-                             <button 
-                                onClick={forceReconnect}
-                                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-1 px-2 rounded text-xs flex items-center justify-center gap-1 shadow-sm"
-                            >
-                                <ArrowPathIcon className="h-3 w-3" /> 強制重新整理
-                            </button>
                         </div>
                     </div>
 
@@ -414,9 +404,6 @@ export const AdminPanel: React.FC = () => {
                         <button onClick={()=>restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
                             <ArrowUpTrayIcon className="h-4 w-4" /> 還原系統資料
                         </button>
-                        <p className="text-[10px] text-blue-600 mt-1 leading-tight">
-                            * 換裝置前請先備份，至新裝置還原即可同步設定與會員資料。
-                        </p>
                     </div>
 
                     <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
