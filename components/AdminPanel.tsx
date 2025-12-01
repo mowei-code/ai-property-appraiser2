@@ -51,7 +51,7 @@ export const AdminPanel: React.FC = () => {
 
   const roles: UserRole[] = ['管理員', '一般用戶', '付費用戶'];
 
-  // Update local state when settings change
+  // Sync settings when panel opens
   useEffect(() => {
       setPaypalClientId(settings.paypalClientId || '');
       setSystemEmail(settings.systemEmail || '');
@@ -119,7 +119,8 @@ export const AdminPanel: React.FC = () => {
       result = await addUser({ email, password, role, name, phone });
     } else if (isEditing) {
       const updatedData: Partial<User> = { role, name, phone };
-      if (password) updatedData.password = password;
+      // Password update logic usually handled by Auth provider, not direct DB update, 
+      // but for metadata/profile we update here. 
       
       if (expiryDate) {
           updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
@@ -321,7 +322,7 @@ export const AdminPanel: React.FC = () => {
       reader.readAsText(file);
   };
 
-  // --- Supabase Connection Block ---
+  // --- Block if Supabase missing ---
   if (!isSupabaseConfigured) {
       return (
         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
@@ -331,13 +332,6 @@ export const AdminPanel: React.FC = () => {
                 <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md">
                     系統偵測到 Supabase 環境變數遺失或設定錯誤。為了避免資料錯誤，管理後台已暫時鎖定。
                 </p>
-                <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg w-full text-left mb-6 font-mono text-sm overflow-x-auto">
-                    <p className="text-gray-500 mb-2">// 請在專案根目錄建立 .env 檔案並填入：</p>
-                    <div className="text-blue-600 dark:text-blue-400">
-                        VITE_SUPABASE_URL=您的Supabase_URL<br/>
-                        VITE_SUPABASE_ANON_KEY=您的Supabase_Anon_Key
-                    </div>
-                </div>
                 <div className="flex gap-4">
                     <button onClick={forceReconnect} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2">
                         <ArrowPathIcon className="h-5 w-5" /> 重新偵測連線
@@ -359,11 +353,13 @@ export const AdminPanel: React.FC = () => {
           <button onClick={() => setAdminPanelOpen(false)} className="p-2 rounded-full hover:bg-gray-200"><XMarkIcon className="h-6 w-6" /></button>
         </div>
         <div className="flex flex-col md:flex-row h-full overflow-hidden">
+          {/* Left Sidebar */}
           <div className="w-full md:w-64 bg-gray-50 dark:bg-gray-800 border-r p-4 overflow-y-auto">
             <div className="space-y-8">
                 <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
                     <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
                     
+                    {/* Database Status */}
                     <div className="mb-4 p-3 rounded-lg border bg-green-100 border-green-200 text-green-800">
                         <div className="flex items-center gap-2 font-bold text-sm">
                             <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
@@ -413,6 +409,8 @@ export const AdminPanel: React.FC = () => {
                 </div>
             </div>
           </div>
+
+          {/* Right Content */}
           <div className="flex-grow p-6 overflow-y-auto bg-white dark:bg-gray-900">
              <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">

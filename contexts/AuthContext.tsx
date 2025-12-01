@@ -37,34 +37,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  // --- Helpers ---
-
+  // 1. 處理 Session 用戶資料同步
   const handleSessionUser = useCallback(async (sessionUser: any) => {
       if (!isSupabaseConfigured) return;
 
       try {
-          // 1. Fetch profile from DB
+          // 從 public.profiles 獲取詳細資料
           let { data: profile, error } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', sessionUser.id)
               .maybeSingle();
 
-          // 2. Recovery: If Admin logs in but has no profile (DB reset), recreate it.
-          if (!profile && sessionUser.email === SYSTEM_ADMIN_EMAIL) {
-              const newProfile = {
-                  id: sessionUser.id,
-                  email: sessionUser.email,
-                  name: 'System Admin',
-                  phone: '0900000000',
-                  role: '管理員',
-                  updated_at: new Date().toISOString()
-              };
-              const { error: insertError } = await supabase.from('profiles').upsert([newProfile]);
-              if (!insertError) profile = newProfile;
-          }
-
-          // 3. Set State
           if (profile) {
               setCurrentUser({
                   id: profile.id,
@@ -75,7 +59,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   subscriptionExpiry: profile.subscription_expiry
               });
           } else {
-              // Fallback if profile missing (should rarely happen for regular users)
+              // 如果 Auth 有人但 Profile 沒資料 (罕見情況，通常是註冊中斷)
+              // 我們暫時用 Auth 的 metadata 填充，或是視為一般用戶
+              console.warn("User has auth session but no profile record.");
               setCurrentUser({
                   id: sessionUser.id,
                   email: sessionUser.email!,
@@ -89,6 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
   }, []);
 
+  // 2. 獲取用戶列表 (僅限管理員)
   const fetchUsers = useCallback(async () => {
     if (!isSupabaseConfigured || !currentUser || currentUser.role !== '管理員') return;
 
@@ -104,11 +91,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
         
         setUsers(mappedUsers);
+    } else if (error) {
+        console.error("Error fetching users:", error);
     }
   }, [currentUser]);
 
   // --- Effects ---
 
+  // 初始化：檢查 Supabase Session
   useEffect(() => {
     const initAuth = async () => {
         if (isSupabaseConfigured) {
@@ -121,6 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initAuth();
   }, [handleSessionUser]);
 
+  // 監聽 Auth 狀態變化
   useEffect(() => {
       if (!isSupabaseConfigured) return;
 
@@ -128,6 +119,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (event === 'SIGNED_OUT') {
               setCurrentUser(null);
               setUsers([]);
+              setAdminPanelOpen(false);
           } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
                await handleSessionUser(session.user);
           }
@@ -138,6 +130,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
   }, [handleSessionUser]);
 
+  // 管理員登入後自動抓取列表
   useEffect(() => {
       if (currentUser?.role === '管理員') {
           fetchUsers();
@@ -151,7 +144,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const login = async (emailInput: string, passInput: string): Promise<AuthResult> => {
-    const email = emailInput.trim().toLowerCase();
+    const email = emailInput.trim(); // Do not lowercase password, but email implies lowercase usually. Supabase handles it.
     const pass = passInput.trim();
 
     if (!isSupabaseConfigured) return { success: false, messageKey: 'loginFailed', message: '未設定 Supabase 連線' };
@@ -172,11 +165,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    setCurrentUser(null);
-    setUsers([]);
     if (isSupabaseConfigured) {
         await supabase.auth.signOut();
     }
+    setCurrentUser(null);
+    setUsers([]);
     setAdminPanelOpen(false);
   };
 
@@ -184,11 +177,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!isSupabaseConfigured) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
 
     try {
-        // 1. Strict Auth Registration First
+        // 1. 註冊 Auth (這是唯一真理)
         const { data, error: signUpError } = await supabase.auth.signUp({
             email: details.email,
             password: details.password,
-            options: { data: { name: details.name, phone: details.phone } }
+            options: { 
+                data: { name: details.name, phone: details.phone } // 存入 Auth metadata 備用
+            }
         });
 
         if (signUpError) {
@@ -196,45 +191,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (data.user) {
-            // 2. Insert Profile (Only if Auth success)
-            // Use the ID from Auth to ensure linkage
+            // 2. 寫入 Profiles (如果 Auth 成功)
+            // 這裡自動判斷：如果 Email 是 admin@mazylab.com，自動給予管理員權限
+            const role = details.email.toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase() ? '管理員' : '一般用戶';
+
             const { error: profileError } = await supabase.from('profiles').insert([{
-                id: data.user.id, // CRITICAL: Must match Auth ID
+                id: data.user.id, // 必須與 Auth ID 一致
                 email: details.email,
                 name: details.name,
                 phone: details.phone,
-                role: details.email === SYSTEM_ADMIN_EMAIL ? '管理員' : '一般用戶',
+                role: role,
                 updated_at: new Date().toISOString(),
             }]);
 
             if (profileError) {
                 console.error("Profile creation failed:", profileError);
-                // We don't rollback Auth here, but we log it. User can likely login and trigger recovery later.
+                // 這裡是一個潛在的資料不一致點，但因為 Auth 已經成功，用戶可以登入。
+                // 理想情況下 Supabase Trigger 會自動建立 profile，但如果我們手動建立失敗，
+                // 用戶登入時 handleSessionUser 可能會抓不到 profile。
+                // 為了修復，我們可以在 login 時再次檢查並 upsert profile。
+                return { success: false, messageKey: 'registrationFailed', errorDetail: '帳號建立成功但個人資料寫入失敗: ' + profileError.message };
             }
             
+            // 自動登入狀態
             await handleSessionUser(data.user);
             setLoginModalOpen(false);
             return { success: true, messageKey: 'registrationSuccess' };
         }
-        return { success: false, messageKey: 'registrationFailed', message: 'No user data returned' };
+        
+        // 如果開啟了 Email 確認，data.user 可能為 null 或 session 為 null，視設定而定
+        return { success: false, messageKey: 'registrationFailed', message: '請檢查信箱驗證信 (如果已開啟驗證)' };
+
     } catch (error: any) {
         return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
     }
   };
 
   const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-      // Client-side cannot create users for others without Service Role.
-      return { success: false, messageKey: 'registrationFailed', message: '請使用公開註冊頁面或 Supabase Dashboard 新增用戶' };
+      // 在客戶端無法直接幫別人建立 Auth 帳號 (需要 Service Role)。
+      // 這裡僅回傳提示，引導管理員使用 Supabase Dashboard 或邀請連結。
+      return { success: false, messageKey: 'registrationFailed', message: '基於安全性，請用戶自行註冊，或至 Supabase 後台新增用戶。' };
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
       if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
 
       try {
+          // 先找到該 email 對應的 user id
           const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
           if (!targetUser) return { success: false, messageKey: 'userNotFound' };
 
-          const dbUpdates: any = { updated_at: new Date().toISOString(), ...updates };
+          // 準備更新資料 (過濾掉不該更新的欄位)
+          const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
           delete dbUpdates.id; 
           delete dbUpdates.email; 
           delete dbUpdates.password; 
@@ -248,14 +256,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           await fetchUsers();
           
-          // Update current user state if self
+          // 如果是更新自己，同步更新狀態
           if (currentUser?.email === email) {
               setCurrentUser({ ...currentUser, ...updates });
           }
 
-          return { success: true, messageKey: 'userUpdated' };
+          return { success: true, messageKey: 'updateUserSuccess' };
       } catch (e: any) {
-          return { success: false, messageKey: 'userUpdated', message: e.message };
+          return { success: false, messageKey: 'updateUserSuccess', message: '更新失敗: ' + e.message };
       }
   };
 
@@ -263,14 +271,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
       
       try {
-          // Note: This only deletes the Profile. To delete Auth user, you need Supabase Admin API (server-side).
+          // 注意：Client 端只能刪除 public.profiles 的資料
+          // 真正的 Auth User 刪除需要 Supabase Service Role (後端)
+          // 這裡我們只做「邏輯刪除」或是刪除 Profile 資料
           const { error } = await supabase.from('profiles').delete().eq('email', email);
           if (error) throw error;
           
           await fetchUsers();
-          return { success: true, messageKey: 'userDeleted', message: '會員資料已刪除 (Auth帳號需至Supabase後台移除)' };
+          return { success: true, messageKey: 'deleteUserSuccess', message: '會員資料已清除 (Auth 帳號需至 Supabase 後台移除)' };
       } catch (e: any) {
-          return { success: false, messageKey: 'userDeleted', message: e.message };
+          return { success: false, messageKey: 'deleteUserSuccess', message: e.message };
       }
   };
 
