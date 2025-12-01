@@ -224,14 +224,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (data.user) {
-            const targetEmail = details.email.toLowerCase();
-            // Trigger created the profile automatically via SQL, but we sync roles just in case
-            const isAdmin = targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase();
-            if (isAdmin) {
-                 // Try to set admin, ignore errors if DB broken
-                 try { await supabase.from('profiles').update({ role: '管理員' }).eq('id', data.user.id); } catch(e) {}
-            }
-            
             // Auto login state
             await handleSessionUser(data.user);
             setLoginModalOpen(false);
