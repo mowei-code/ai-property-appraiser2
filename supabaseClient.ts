@@ -33,7 +33,10 @@ const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL';
 
 if (!isSupabaseConfigured) {
-  console.warn('Supabase credentials not found or invalid. App will run in local-only mode with limited functionality.');
+  console.error('[SupabaseClient] Critical Error: Credentials not found or invalid.');
+  console.error('Please create a .env file in the project root with:');
+  console.error('VITE_SUPABASE_URL=your_project_url');
+  console.error('VITE_SUPABASE_ANON_KEY=your_anon_key');
 }
 
 // --- Singleton Pattern Implementation ---
@@ -59,6 +62,7 @@ const getSupabaseClient = () => {
         });
     } else {
         // 建立一個佔位符，防止未設定時報錯
+        // 注意：這只是一個防止 crash 的空殼，任何呼叫都會失敗。
         supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
     }
     return supabaseInstance;

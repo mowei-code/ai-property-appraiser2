@@ -5,7 +5,7 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
-import { isSupabaseConfigured } from '../supabaseClient'; // Import status check
+import { isSupabaseConfigured } from '../supabaseClient'; 
 
 // 內建 EyeIcon 與 EyeSlashIcon 以避免新增檔案依賴
 const EyeIcon = ({ className }: { className?: string }) => (
@@ -74,9 +74,15 @@ export const LoginModal: React.FC = () => {
 
   const handleMainSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return; // Prevent double submit
+    if (isLoading) return; 
     
     setError('');
+    
+    if (!isSupabaseConfigured) {
+        setError('系統未連線至資料庫，無法登入。請聯絡管理員設定 .env。');
+        return;
+    }
+
     if (!email || !password) { setError(t('error_fillEmailPassword')); return; }
     
     setIsLoading(true);
@@ -98,7 +104,6 @@ export const LoginModal: React.FC = () => {
            const result = await register({ email, password, name, phone });
            if (!result.success) {
              setError(t(result.messageKey));
-             // Show detailed DB error if available (debugging purpose)
              if (result.errorDetail) {
                  setError(prev => `${prev} (${result.errorDetail})`);
              }
@@ -126,8 +131,7 @@ export const LoginModal: React.FC = () => {
   const toggleFormType = () => { setIsRegister(!isRegister); setError(''); setRegistrationSuccess(false); };
   const switchToLoginAfterSuccess = () => { setIsRegister(false); setError(''); setRegistrationSuccess(false); };
 
-  // Common input style for Dark Mode compatibility
-  const inputClass = "w-full border border-slate-300 dark:border-slate-600 p-3 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors";
+  const inputClass = "w-full border border-slate-300 dark:border-slate-600 p-3 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:bg-slate-200 disabled:cursor-not-allowed";
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setLoginModalOpen(false)}>
@@ -138,6 +142,13 @@ export const LoginModal: React.FC = () => {
         </header>
 
         <div className="p-6 space-y-4">
+          {!isSupabaseConfigured && (
+              <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-lg text-sm border border-red-200 dark:border-red-800 text-center">
+                  <strong>系統維護中</strong><br/>
+                  無法連線至雲端資料庫。<br/>請聯繫管理員檢查環境變數設定。
+              </div>
+          )}
+
           {registrationSuccess ? (
               <div className="text-center space-y-6">
                   <p className="text-lg font-bold text-green-600 dark:text-green-400">{t('registrationSuccess')}</p>
@@ -160,6 +171,7 @@ export const LoginModal: React.FC = () => {
                             placeholder={t('name')} 
                             className={inputClass} 
                             required 
+                            disabled={!isSupabaseConfigured}
                         />
                         <input 
                             type="text" 
@@ -168,6 +180,7 @@ export const LoginModal: React.FC = () => {
                             placeholder={t('phone')} 
                             className={inputClass} 
                             required 
+                            disabled={!isSupabaseConfigured}
                         />
                     </>
                 )}
@@ -178,6 +191,7 @@ export const LoginModal: React.FC = () => {
                     placeholder={t('email')} 
                     className={inputClass} 
                     required 
+                    disabled={!isSupabaseConfigured}
                 />
                 
                 <div className="relative">
@@ -188,12 +202,14 @@ export const LoginModal: React.FC = () => {
                         placeholder={t('password')} 
                         className={inputClass} 
                         required 
+                        disabled={!isSupabaseConfigured}
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
                         tabIndex={-1}
+                        disabled={!isSupabaseConfigured}
                     >
                         {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
                     </button>
@@ -207,6 +223,7 @@ export const LoginModal: React.FC = () => {
                             onChange={e=>setCaptcha(e.target.value)} 
                             placeholder={t('captcha')} 
                             className={inputClass} 
+                            disabled={!isSupabaseConfigured}
                         />
                         <div className="bg-gray-200 dark:bg-slate-600 dark:text-white p-3 rounded-lg flex items-center justify-center font-mono font-bold tracking-widest select-none w-1/3">
                             {generatedCaptcha}
@@ -222,8 +239,8 @@ export const LoginModal: React.FC = () => {
                 
                 <button 
                     type="submit" 
-                    disabled={isLoading}
-                    className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                    disabled={isLoading || !isSupabaseConfigured}
+                    className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading || !isSupabaseConfigured ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
                 >
                     {isLoading && (
                         <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -241,9 +258,9 @@ export const LoginModal: React.FC = () => {
         </div>
         
         {/* Connection Status Footer */}
-        <div className={`px-4 py-2 text-[10px] text-center border-t ${isSupabaseConfigured ? 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'}`}>
-            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線 (Supabase)' : '本地離線模式 (Local Storage)'}
-            {!isSupabaseConfigured && ' (請檢查 Vercel 環境變數 VITE_SUPABASE_URL)'}
+        <div className={`px-4 py-2 text-[10px] text-center border-t ${isSupabaseConfigured ? 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
+            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線 (Supabase)' : '資料庫未連線 (功能已停用)'}
+            {!isSupabaseConfigured && ' - 請檢查 .env 設定'}
         </div>
       </div>
     </div>

@@ -19,7 +19,7 @@ import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 
 export const AdminPanel: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, isFailsafeMode, forceReconnect } = useContext(AuthContext);
+  const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, forceReconnect } = useContext(AuthContext);
   const { t, settings, saveSettings } = useContext(SettingsContext);
   const [isEditing, setIsEditing] = useState<User | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -31,7 +31,7 @@ export const AdminPanel: React.FC = () => {
   const [role, setRole] = useState<UserRole>('一般用戶');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [expiryDate, setExpiryDate] = useState(''); // New state for manual expiry editing
+  const [expiryDate, setExpiryDate] = useState(''); 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [importStatus, setImportStatus] = useState('');
@@ -51,9 +51,10 @@ export const AdminPanel: React.FC = () => {
 
   const roles: UserRole[] = ['管理員', '一般用戶', '付費用戶'];
 
-  // Force refresh on mount to clear phantom users
   useEffect(() => {
-      handleRefreshUsers();
+      if (isSupabaseConfigured) {
+          handleRefreshUsers();
+      }
   }, []);
 
   useEffect(() => {
@@ -63,7 +64,6 @@ export const AdminPanel: React.FC = () => {
       setRole(isEditing.role);
       setName(isEditing.name || '');
       setPhone(isEditing.phone || '');
-      // Format ISO date to YYYY-MM-DD for input type="date"
       if (isEditing.subscriptionExpiry) {
           setExpiryDate(new Date(isEditing.subscriptionExpiry).toISOString().split('T')[0]);
       } else {
@@ -102,7 +102,6 @@ export const AdminPanel: React.FC = () => {
 
   const handleRoleChange = (newRole: UserRole) => {
       setRole(newRole);
-      // Auto-populate expiry if switching to Paid User and no date is set
       if (newRole === '付費用戶' && !expiryDate) {
           const nextMonth = new Date();
           nextMonth.setDate(nextMonth.getDate() + 30);
@@ -116,17 +115,14 @@ export const AdminPanel: React.FC = () => {
     setSuccess('');
     let result;
     if (isAdding) {
-      // For adding, we don't usually set expiry immediately unless logic changes, keeping it simple.
       result = await addUser({ email, password, role, name, phone });
     } else if (isEditing) {
       const updatedData: Partial<User> = { role, name, phone };
       if (password) updatedData.password = password;
       
-      // Update Expiry Date Logic
       if (expiryDate) {
           updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
       } else {
-          // If cleared, explicitly set to null
           updatedData.subscriptionExpiry = null; 
       }
 
@@ -135,7 +131,7 @@ export const AdminPanel: React.FC = () => {
 
     if (result.success) {
       setSuccess(t(result.messageKey));
-      await refreshUsers(); // CRITICAL: Force refresh list after save
+      await refreshUsers(); 
       if(isAdding) resetForm();
     } else {
       setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
@@ -215,7 +211,6 @@ export const AdminPanel: React.FC = () => {
       const now = new Date();
       let newExpiryDate = now;
       
-      // If manually edited date exists, base calculation on that, else check existing subscription
       const baseDate = expiryDate ? new Date(expiryDate) : (isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry) : now);
       
       if (baseDate > now) {
@@ -225,17 +220,14 @@ export const AdminPanel: React.FC = () => {
       newExpiryDate.setDate(newExpiryDate.getDate() + days);
       const isoDate = newExpiryDate.toISOString();
 
-      // Update backend
       const result = await updateUser(isEditing.email, { role: '付費用戶', subscriptionExpiry: isoDate });
       
       if (result.success) {
           setSuccess(t('subscriptionExtended', { date: newExpiryDate.toLocaleDateString() }));
-          // Update local state immediately for UI responsiveness
           setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: isoDate });
           setRole('付費用戶');
           setExpiryDate(isoDate.split('T')[0]);
           
-          // CRITICAL FIX: Force refresh the main user list so the background table updates to reflect DB state
           await refreshUsers();
       } else { 
           setError(t(result.messageKey) + (result.message ? `: ${result.message}` : '')); 
@@ -328,6 +320,38 @@ export const AdminPanel: React.FC = () => {
       reader.readAsText(file);
   };
 
+  // --- CRITICAL BLOCKER: If Supabase is NOT connected, show setup guide only ---
+  if (!isSupabaseConfigured) {
+      return (
+        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl p-8 border border-red-500 flex flex-col items-center text-center">
+                <ExclamationTriangleIcon className="h-20 w-20 text-red-500 mb-4" />
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">無法連線至雲端資料庫</h2>
+                <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md">
+                    系統偵測到 Supabase 環境變數遺失或設定錯誤。為了避免資料錯誤，管理後台已暫時鎖定。
+                </p>
+                
+                <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg w-full text-left mb-6 font-mono text-sm overflow-x-auto">
+                    <p className="text-gray-500 mb-2">// 請在專案根目錄建立 .env 檔案並填入：</p>
+                    <div className="text-blue-600 dark:text-blue-400">
+                        VITE_SUPABASE_URL=您的Supabase_URL<br/>
+                        VITE_SUPABASE_ANON_KEY=您的Supabase_Anon_Key
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <button onClick={forceReconnect} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2">
+                        <ArrowPathIcon className="h-5 w-5" /> 重新偵測連線
+                    </button>
+                    <button onClick={() => setAdminPanelOpen(false)} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold">
+                        關閉
+                    </button>
+                </div>
+            </div>
+        </div>
+      );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-orange-400 dark:border-orange-500">
@@ -341,31 +365,20 @@ export const AdminPanel: React.FC = () => {
                 <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
                     <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
                     
-                    {/* Supabase Status Indicator */}
-                    <div className={`mb-4 p-3 rounded-lg border ${isSupabaseConfigured ? 'bg-green-100 border-green-200 text-green-800' : 'bg-yellow-100 border-yellow-200 text-yellow-800'}`}>
+                    {/* Supabase Status Indicator (Connected State) */}
+                    <div className="mb-4 p-3 rounded-lg border bg-green-100 border-green-200 text-green-800">
                         <div className="flex items-center gap-2 font-bold text-sm">
-                            {isSupabaseConfigured ? <CheckCircleIcon className="h-5 w-5 flex-shrink-0" /> : <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />}
-                            <span>{isSupabaseConfigured ? '雲端資料庫 (Connected)' : '本地模式 (Local Mode)'}</span>
+                            <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
+                            <span>雲端資料庫 (連線正常)</span>
                         </div>
-                        {!isSupabaseConfigured && (
-                            <p className="text-[10px] mt-1 ml-7 leading-tight opacity-80">
-                                未偵測到 Supabase 設定。請在專案根目錄建立 <code>.env</code> 檔案並填入 URL 與 Key。目前使用瀏覽器暫存。
-                            </p>
-                        )}
-                        {isFailsafeMode && (
-                            <div className="mt-2 text-xs bg-red-100 text-red-800 p-2 rounded border border-red-300">
-                                <strong>⚠️ 警告：離線管理模式</strong>
-                                <p className="mt-1 mb-2">
-                                    資料庫連線失敗。您目前使用的是緊急備用管理員帳號，無法讀寫真實資料庫。請檢查網路或 Supabase 設定。
-                                </p>
-                                <button 
-                                    onClick={forceReconnect}
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center justify-center gap-1"
-                                >
-                                    <ArrowPathIcon className="h-3 w-3" /> 強制重連 (清除緩存)
-                                </button>
-                            </div>
-                        )}
+                        <div className="mt-3 border-t border-black/10 pt-2">
+                             <button 
+                                onClick={forceReconnect}
+                                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-1 px-2 rounded text-xs flex items-center justify-center gap-1 shadow-sm"
+                            >
+                                <ArrowPathIcon className="h-3 w-3" /> 強制重新整理
+                            </button>
+                        </div>
                     </div>
 
                     <div className="space-y-4">
