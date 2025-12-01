@@ -300,18 +300,18 @@ export const LoginModal: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-2xl border-2 border-indigo-500">
                   <h3 className="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-4 flex items-center gap-2">
                       <DocumentTextIcon className="h-6 w-6" />
-                      資料庫修復指令 (SQL Setup)
+                      資料庫修復指令 (SQL Setup) - 加強版
                   </h3>
                   <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                      <p>系統偵測到資料庫錯誤。請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行以徹底修復。</p>
-                      <p className="text-red-600 dark:text-red-400 font-bold">這段指令包含了 DROP POLICY 以清除舊設定，解決登入卡住的問題。</p>
+                      <p>系統偵測到資料庫錯誤。請複製下方<strong>最新版本</strong>的代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
+                      <p className="text-red-600 dark:text-red-400 font-bold">此版本增加了權限授權 (GRANT) 與路徑設定，能解決「權限不足」或「找不到資料表」的頑固問題。</p>
                   </div>
                   <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
-{`-- 1. 重設 Triggers (清理舊設定)
+{`-- 1. Reset Triggers & Functions (清理舊設定)
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 2. 確保資料表存在
+-- 2. Ensure Table Exists (確保資料表)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
   email text,
@@ -322,29 +322,29 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at timestamptz
 );
 
--- 3. 設定權限 (RLS) - 關鍵：允許用戶自我修復
+-- 3. Grants (關鍵：修復權限問題)
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL ON TABLE public.profiles TO postgres, anon, authenticated, service_role;
+
+-- 4. RLS Policies (設定讀寫規則)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- [重要] 清除舊政策以避免衝突
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 
--- 允許用戶讀取自己的資料
-CREATE POLICY "Users can view own profile" ON public.profiles
-FOR SELECT USING (auth.uid() = id);
+-- 允許讀取自己的資料
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+-- 允許更新自己的資料
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+-- 允許插入自己的資料 (自我修復用)
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
--- 允許用戶更新自己的資料
-CREATE POLICY "Users can update own profile" ON public.profiles
-FOR UPDATE USING (auth.uid() = id);
-
--- 允許用戶插入自己的資料 (自我修復用)
-CREATE POLICY "Users can insert own profile" ON public.profiles
-FOR INSERT WITH CHECK (auth.uid() = id);
-
--- 4. 重新建立 Trigger (僅針對新註冊用戶)
+-- 5. Trigger Function (設定觸發器，並指定 search_path 以防萬一)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
+RETURNS trigger
+SECURITY DEFINER SET search_path = public
+AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, name, role, updated_at)
   VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now())
@@ -354,7 +354,7 @@ BEGIN
       updated_at = now();
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
