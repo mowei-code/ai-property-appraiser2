@@ -1,12 +1,12 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// 輔助函式：安全地讀取環境變數 (支援 Vite 與 Node.js/Electron 環境)
-const getEnvVar = (key: string): string | undefined => {
+// 輔助函式：安全地讀取環境變數 (支援 Vite 與 Node.js/Electron 環境，以及 LocalStorage)
+const getEnvVar = (key: string, storageKey?: string): string | undefined => {
+  // 1. 優先檢查 Vite 的 import.meta.env
   try {
-    // 優先檢查 Vite 的 import.meta.env
     // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
       // @ts-ignore
       return import.meta.env[key];
     }
@@ -14,55 +14,79 @@ const getEnvVar = (key: string): string | undefined => {
     // 忽略存取錯誤
   }
 
+  // 2. 後備檢查 Node.js 的 process.env
   try {
-    // 後備檢查 Node.js 的 process.env
-    if (typeof process !== 'undefined' && process.env) {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
       return process.env[key];
     }
   } catch (e) {
     // 忽略存取錯誤
   }
   
+  // 3. 最後檢查 LocalStorage (瀏覽器環境，允許使用者手動輸入)
+  try {
+      if (storageKey && typeof window !== 'undefined' && window.localStorage) {
+          const val = window.localStorage.getItem(storageKey);
+          if (val && val.trim() !== '') return val.trim();
+      }
+  } catch (e) {}
+
   return undefined;
 };
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+// 驗證 URL 格式的輔助函式
+const isValidUrl = (urlString: string | undefined): boolean => {
+    if (!urlString) return false;
+    try { 
+        new URL(urlString); 
+        return true; 
+    } catch(e) { 
+        return false; 
+    }
+};
 
-// 檢查是否已設定 Supabase 環境變數
-export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL';
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'app_supabase_url');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'app_supabase_anon_key');
+
+// 嚴格檢查：必須有值、且 URL 格式正確、且不是預設佔位符
+export const isSupabaseConfigured = !!supabaseUrl && 
+                                    !!supabaseAnonKey && 
+                                    supabaseUrl !== 'YOUR_SUPABASE_URL' &&
+                                    isValidUrl(supabaseUrl);
 
 if (!isSupabaseConfigured) {
-  console.error('[SupabaseClient] Critical Error: Credentials not found or invalid.');
-  console.error('Please create a .env file in the project root with:');
-  console.error('VITE_SUPABASE_URL=your_project_url');
-  console.error('VITE_SUPABASE_ANON_KEY=your_anon_key');
+  console.warn('[SupabaseClient] Config missing or invalid. App running in disconnected mode.');
+  // Log details to help debugging (safe to log URL structure issue, hide Key)
+  if (!supabaseUrl) console.warn('Missing URL');
+  else if (!isValidUrl(supabaseUrl)) console.warn('Invalid URL format:', supabaseUrl);
+  if (!supabaseAnonKey) console.warn('Missing Anon Key');
 }
 
 // --- Singleton Pattern Implementation ---
-// 這是為了符合 Supabase 在 Vercel/Serverless 環境下的最佳實踐。
-// 避免因為 React HMR (熱重載) 或元件重新渲染而建立多個客戶端實例。
-
 let supabaseInstance: SupabaseClient | null = null;
 
 const getSupabaseClient = () => {
     if (supabaseInstance) return supabaseInstance;
 
-    if (isSupabaseConfigured) {
-        supabaseInstance = createClient(supabaseUrl!, supabaseAnonKey!, {
-            auth: {
-                persistSession: true, // 確保 session 在瀏覽器重整後保留
-                autoRefreshToken: true,
-                detectSessionInUrl: true
-            },
-            // 這裡可以加入 global fetch 設定來優化連線，例如設定 timeout
-            global: {
-                headers: { 'x-application-name': 'ai-property-appraiser' },
-            }
-        });
+    if (isSupabaseConfigured && supabaseUrl && supabaseAnonKey) {
+        try {
+            supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true
+                },
+                global: {
+                    headers: { 'x-application-name': 'ai-property-appraiser' },
+                }
+            });
+        } catch (error) {
+            console.error('[SupabaseClient] Crash during client creation:', error);
+            // Fallback to placeholder to prevent white screen of death
+            supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
+        }
     } else {
         // 建立一個佔位符，防止未設定時報錯
-        // 注意：這只是一個防止 crash 的空殼，任何呼叫都會失敗。
         supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
     }
     return supabaseInstance;

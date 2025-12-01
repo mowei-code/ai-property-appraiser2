@@ -8,6 +8,7 @@ import { sendEmail } from '../services/emailService';
 import { isSupabaseConfigured } from '../supabaseClient'; 
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { CheckCircleIcon } from './icons/CheckCircleIcon';
 
 // 內建 EyeIcon 與 EyeSlashIcon 以避免新增檔案依賴
 const EyeIcon = ({ className }: { className?: string }) => (
@@ -40,6 +41,19 @@ export const LoginModal: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showDbHelp, setShowDbHelp] = useState(false);
+  
+  // 如果未設定連線，直接預設顯示設定畫面
+  const [showSupabaseSetup, setShowSupabaseSetup] = useState(!isSupabaseConfigured);
+  const [sbUrl, setSbUrl] = useState('');
+  const [sbKey, setSbKey] = useState('');
+
+  useEffect(() => {
+    // 從 LocalStorage 預填，方便修改
+    const savedUrl = localStorage.getItem('app_supabase_url');
+    const savedKey = localStorage.getItem('app_supabase_anon_key');
+    if (savedUrl) setSbUrl(savedUrl);
+    if (savedKey) setSbKey(savedKey);
+  }, []);
 
   useEffect(() => {
     if (isRegister) {
@@ -83,7 +97,9 @@ export const LoginModal: React.FC = () => {
     setShowDbHelp(false);
     
     if (!isSupabaseConfigured) {
-        setError('系統未連線至資料庫，無法登入。請聯絡管理員設定 .env。');
+        // 如果此時尚未設定，強制切換到設定頁面
+        setShowSupabaseSetup(true);
+        setError('請先完成資料庫連線設定。');
         return;
     }
 
@@ -110,7 +126,6 @@ export const LoginModal: React.FC = () => {
              setError(t(result.messageKey));
              if (result.errorDetail) {
                  setError(prev => `${prev} (${result.errorDetail})`);
-                 // Auto-detect database related errors
                  if (result.errorDetail.toLowerCase().includes('database error') || result.errorDetail.includes('constraint')) {
                      setShowDbHelp(true);
                  }
@@ -126,16 +141,11 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
-              // Always show DB help if login fails, as it might be the RLS/Trigger issue
-              // Also show it for "Invalid login credentials" if user suspects sync issue, 
-              // but mostly for DB errors.
-              // We'll show it if error message contains specific keywords or just generally if it's not a simple password error
               if (loginResult.message?.toLowerCase().includes('database error') || 
                   loginResult.message?.includes('row-level security') ||
                   loginResult.message?.includes('policy') ) {
                   setShowDbHelp(true);
               } else {
-                  // Allow user to check DB status anyway if they fail to login multiple times or just want to debug
                   setShowDbHelp(true);
               }
           }
@@ -146,6 +156,24 @@ export const LoginModal: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
+  };
+  
+  const handleSaveSupabaseConfig = () => {
+      if(!sbUrl || !sbKey) {
+          setError('請填寫 URL 與 Key');
+          return;
+      }
+      try {
+          // 簡單驗證 URL 格式
+          new URL(sbUrl);
+          
+          localStorage.setItem('app_supabase_url', sbUrl.trim());
+          localStorage.setItem('app_supabase_anon_key', sbKey.trim());
+          alert('設定已儲存，頁面將重新整理以套用。');
+          window.location.reload();
+      } catch (e) {
+          setError('無效的 URL 格式，請確認開頭包含 https://');
+      }
   };
   
   const toggleFormType = () => { setIsRegister(!isRegister); setError(''); setRegistrationSuccess(false); setShowDbHelp(false); };
@@ -162,14 +190,62 @@ export const LoginModal: React.FC = () => {
         </header>
 
         <div className="p-6 space-y-4">
-          {!isSupabaseConfigured && (
-              <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-lg text-sm border border-red-200 dark:border-red-800 text-center">
-                  <strong>系統維護中</strong><br/>
-                  無法連線至雲端資料庫。<br/>請聯繫管理員檢查環境變數設定。
+          
+          {/* 強制顯示設定介面，如果未連線 */}
+          {showSupabaseSetup ? (
+              <div className="space-y-4 animate-fade-in">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <h3 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-2 flex items-center gap-2">
+                          <CheckCircleIcon className="h-4 w-4" />
+                          初始化系統連線 (Supabase)
+                      </h3>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">
+                          首次使用或 .env 未設定時，請在此輸入您的連線資訊。
+                      </p>
+                      
+                      <div className="space-y-3">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1">Project URL (例如: https://xyz.supabase.co)</label>
+                              <input 
+                                  type="text" 
+                                  value={sbUrl} 
+                                  onChange={e=>setSbUrl(e.target.value)} 
+                                  placeholder="https://your-project.supabase.co" 
+                                  className={inputClass + " text-sm"}
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1">Anon Key (public)</label>
+                              <input 
+                                  type="password" 
+                                  value={sbKey} 
+                                  onChange={e=>setSbKey(e.target.value)} 
+                                  placeholder="eyJh..." 
+                                  className={inputClass + " text-sm"}
+                              />
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                      {/* 如果已經有連線，才允許取消設定畫面 */}
+                      {isSupabaseConfigured && (
+                          <button 
+                              onClick={() => setShowSupabaseSetup(false)} 
+                              className="w-1/3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-bold text-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                          >
+                              返回
+                          </button>
+                      )}
+                      <button 
+                          onClick={handleSaveSupabaseConfig} 
+                          className={`py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-md ${isSupabaseConfigured ? 'w-2/3' : 'w-full'}`}
+                      >
+                          儲存設定並重整頁面
+                      </button>
+                  </div>
               </div>
-          )}
-
-          {registrationSuccess ? (
+          ) : registrationSuccess ? (
               <div className="text-center space-y-6">
                   <p className="text-lg font-bold text-green-600 dark:text-green-400">{t('registrationSuccess')}</p>
                   <p className="text-gray-600 dark:text-gray-300">{t('registrationSuccessPrompt')}</p>
@@ -257,7 +333,7 @@ export const LoginModal: React.FC = () => {
                         {showDbHelp && (
                             <button 
                                 type="button" 
-                                onClick={() => setShowDbHelp(true)} /* Re-trigger just in case */
+                                onClick={() => setShowDbHelp(true)} 
                                 className="mt-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-800 py-1 px-2 rounded text-xs font-bold transition-colors"
                             >
                                 <ExclamationTriangleIcon className="h-3 w-3" />
@@ -280,17 +356,27 @@ export const LoginModal: React.FC = () => {
                     )}
                     {isRegister ? t('register') : t('login')}
                 </button>
-                <p className="text-center text-sm cursor-pointer text-blue-600 dark:text-blue-400 hover:underline" onClick={toggleFormType}>
-                    {isRegister ? t('clickToLogin') : t('clickToRegister')}
-                </p>
+                <div className="flex justify-between items-center text-sm">
+                    <p className="cursor-pointer text-blue-600 dark:text-blue-400 hover:underline" onClick={toggleFormType}>
+                        {isRegister ? t('clickToLogin') : t('clickToRegister')}
+                    </p>
+                    {isSupabaseConfigured && (
+                        <button 
+                            type="button"
+                            onClick={() => setShowSupabaseSetup(true)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs"
+                        >
+                            重設連線
+                        </button>
+                    )}
+                </div>
             </form>
           )}
         </div>
         
         {/* Connection Status Footer */}
         <div className={`px-4 py-2 text-[10px] text-center border-t ${isSupabaseConfigured ? 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
-            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線 (Supabase)' : '資料庫未連線 (功能已停用)'}
-            {!isSupabaseConfigured && ' - 請檢查 .env 設定'}
+            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線' : '等待連線設定...'}
         </div>
       </div>
 
