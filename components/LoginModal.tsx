@@ -141,13 +141,14 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
+              // 修正：只有在明確偵測到資料庫錯誤時才自動彈出修復視窗
+              // 一般的「密碼錯誤」或「用戶不存在」不再自動彈出視窗
               if (loginResult.message?.toLowerCase().includes('database error') || 
                   loginResult.message?.includes('row-level security') ||
-                  loginResult.message?.includes('policy') ) {
+                  loginResult.message?.includes('policy') ||
+                  loginResult.message?.includes('relation "public.profiles" does not exist')) {
                   setShowDbHelp(true);
-              } else {
-                  setShowDbHelp(true);
-              }
+              } 
           }
         }
     } catch (e) {
@@ -330,16 +331,15 @@ export const LoginModal: React.FC = () => {
                 {error && (
                     <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded border border-red-200 dark:border-red-800 break-words flex flex-col gap-2">
                         <span>{error}</span>
-                        {showDbHelp && (
-                            <button 
-                                type="button" 
-                                onClick={() => setShowDbHelp(true)} 
-                                className="mt-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-800 py-1 px-2 rounded text-xs font-bold transition-colors"
-                            >
-                                <ExclamationTriangleIcon className="h-3 w-3" />
-                                偵測到資料庫錯誤 - 點此查看修復指令
-                            </button>
-                        )}
+                        {/* 手動開啟修復視窗的按鈕，不再自動彈出 */}
+                        <button 
+                            type="button" 
+                            onClick={() => setShowDbHelp(true)} 
+                            className="mt-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-800 py-1.5 px-2 rounded text-xs font-bold transition-colors w-full"
+                        >
+                            <ExclamationTriangleIcon className="h-3 w-3" />
+                            如果您懷疑是資料庫問題，點此查看修復指令
+                        </button>
                     </div>
                 )}
                 
