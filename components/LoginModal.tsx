@@ -94,7 +94,7 @@ export const LoginModal: React.FC = () => {
     if (isLoading) return; 
     
     setError('');
-    setShowDbHelp(false);
+    // 注意：這裡不重置 showDbHelp，讓用戶如果手動打開了可以保持打開
     
     if (!isSupabaseConfigured) {
         // 如果此時尚未設定，強制切換到設定頁面
@@ -126,9 +126,7 @@ export const LoginModal: React.FC = () => {
              setError(t(result.messageKey));
              if (result.errorDetail) {
                  setError(prev => `${prev} (${result.errorDetail})`);
-                 if (result.errorDetail.toLowerCase().includes('database error') || result.errorDetail.includes('constraint')) {
-                     setShowDbHelp(true);
-                 }
+                 // 這裡我們不再自動彈出 setShowDbHelp(true)，只顯示錯誤訊息
              }
              setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
            } else {
@@ -141,14 +139,7 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
-              // 修正：只有在明確偵測到資料庫錯誤時才自動彈出修復視窗
-              // 一般的「密碼錯誤」或「用戶不存在」不再自動彈出視窗
-              if (loginResult.message?.toLowerCase().includes('database error') || 
-                  loginResult.message?.includes('row-level security') ||
-                  loginResult.message?.includes('policy') ||
-                  loginResult.message?.includes('relation "public.profiles" does not exist')) {
-                  setShowDbHelp(true);
-              } 
+              // 這裡我們不再自動彈出 setShowDbHelp(true)，只顯示錯誤訊息
           }
         }
     } catch (e) {
@@ -331,7 +322,7 @@ export const LoginModal: React.FC = () => {
                 {error && (
                     <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded border border-red-200 dark:border-red-800 break-words flex flex-col gap-2">
                         <span>{error}</span>
-                        {/* 手動開啟修復視窗的按鈕，不再自動彈出 */}
+                        {/* 手動開啟修復視窗的按鈕，完全手動 */}
                         <button 
                             type="button" 
                             onClick={() => setShowDbHelp(true)} 
