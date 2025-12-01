@@ -126,7 +126,16 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
-              if (loginResult.message?.toLowerCase().includes('database error')) {
+              // Always show DB help if login fails, as it might be the RLS/Trigger issue
+              // Also show it for "Invalid login credentials" if user suspects sync issue, 
+              // but mostly for DB errors.
+              // We'll show it if error message contains specific keywords or just generally if it's not a simple password error
+              if (loginResult.message?.toLowerCase().includes('database error') || 
+                  loginResult.message?.includes('row-level security') ||
+                  loginResult.message?.includes('policy') ) {
+                  setShowDbHelp(true);
+              } else {
+                  // Allow user to check DB status anyway if they fail to login multiple times or just want to debug
                   setShowDbHelp(true);
               }
           }
@@ -294,30 +303,59 @@ export const LoginModal: React.FC = () => {
                       資料庫修復指令 (SQL Setup)
                   </h3>
                   <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                      <p>系統偵測到資料庫錯誤（通常是 Foreign Key 或 Trigger 設定問題）。</p>
-                      <p>請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行以修復問題。</p>
+                      <p>系統偵測到資料庫錯誤。請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行以徹底修復。</p>
+                      <p className="text-red-600 dark:text-red-400 font-bold">這段指令包含了 DROP POLICY 以清除舊設定，解決登入卡住的問題。</p>
                   </div>
                   <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
-{`-- 1. 解除舊的 Foreign Key (如果有的話)
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+{`-- 1. 重設 Triggers (清理舊設定)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 2. 重新加入 Foreign Key 並設定連動刪除 (ON DELETE CASCADE)
-ALTER TABLE public.profiles
-ADD CONSTRAINT profiles_id_fkey
-FOREIGN KEY (id) REFERENCES auth.users(id)
-ON DELETE CASCADE;
+-- 2. 確保資料表存在
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
+  email text,
+  name text,
+  role text DEFAULT '一般用戶',
+  phone text,
+  subscription_expiry timestamptz,
+  updated_at timestamptz
+);
 
--- 3. 設定自動新增 Profile 的 Trigger (避免註冊後沒有資料)
+-- 3. 設定權限 (RLS) - 關鍵：允許用戶自我修復
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- [重要] 清除舊政策以避免衝突
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+
+-- 允許用戶讀取自己的資料
+CREATE POLICY "Users can view own profile" ON public.profiles
+FOR SELECT USING (auth.uid() = id);
+
+-- 允許用戶更新自己的資料
+CREATE POLICY "Users can update own profile" ON public.profiles
+FOR UPDATE USING (auth.uid() = id);
+
+-- 允許用戶插入自己的資料 (自我修復用)
+CREATE POLICY "Users can insert own profile" ON public.profiles
+FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- 4. 重新建立 Trigger (僅針對新註冊用戶)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, name, role, updated_at)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now());
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now())
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      name = EXCLUDED.name,
+      updated_at = now();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();`}

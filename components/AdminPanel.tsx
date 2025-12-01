@@ -519,30 +519,54 @@ export const AdminPanel: React.FC = () => {
                   </h3>
                   <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
                       <p>請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
-                      <p>這將解決：1. <strong>無法刪除用戶</strong> (錯誤：Delete on table users violates foreign key) 2. <strong>註冊後無資料</strong> 的問題。</p>
+                      <p>這將解決：1. <strong>無法刪除用戶</strong> (Foreign Key 錯誤) 2. <strong>註冊/登入失敗</strong> (Trigger 錯誤) 的問題。</p>
+                      <p><strong>注意：</strong> 這次的指令加入了防呆機制 (ON CONFLICT) 與 RLS 權限，能自動處理已存在的資料並允許前端修復。</p>
                   </div>
                   <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
-{`-- 1. 解除舊的 Foreign Key (如果有的話)
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+{`-- 1. 重設 Triggers (清理舊設定)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 2. 重新加入 Foreign Key 並設定連動刪除 (ON DELETE CASCADE)
--- 這樣當您在 Supabase 後台刪除 User 時，Profile 也會自動刪除，不會報錯
-ALTER TABLE public.profiles
-ADD CONSTRAINT profiles_id_fkey
-FOREIGN KEY (id) REFERENCES auth.users(id)
-ON DELETE CASCADE;
+-- 2. 確保資料表存在
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
+  email text,
+  name text,
+  role text DEFAULT '一般用戶',
+  phone text,
+  subscription_expiry timestamptz,
+  updated_at timestamptz
+);
 
--- 3. 設定自動新增 Profile 的 Trigger (避免註冊後沒有資料)
+-- 3. 設定權限 (RLS) - 關鍵：允許用戶自我修復
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- 允許用戶讀取自己的資料
+CREATE POLICY "Users can view own profile" ON public.profiles
+FOR SELECT USING (auth.uid() = id);
+
+-- 允許用戶更新自己的資料
+CREATE POLICY "Users can update own profile" ON public.profiles
+FOR UPDATE USING (auth.uid() = id);
+
+-- 允許用戶插入自己的資料 (自我修復用)
+CREATE POLICY "Users can insert own profile" ON public.profiles
+FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- 4. 重新建立 Trigger (僅針對新註冊用戶)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, name, role, updated_at)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now());
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now())
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      name = EXCLUDED.name,
+      updated_at = now();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();`}

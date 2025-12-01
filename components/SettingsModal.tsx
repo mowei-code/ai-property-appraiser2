@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
@@ -306,7 +307,7 @@ export const SettingsModal: React.FC = () => {
         <main className="flex-grow p-6 overflow-y-auto">
           <form id="settings-form" onSubmit={handleSave} className="space-y-6">
             {/* Account Upgrade Section for General Users */}
-            {currentUser?.role === '一般用戶' && (
+            {(currentUser?.role as string) === '一般用戶' && (
               <fieldset className="space-y-4 p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border-2 border-amber-300 dark:border-amber-700/50 relative overflow-hidden">
                  <div className="absolute top-0 right-0 p-2 opacity-10">
                     <SparklesIcon className="h-24 w-24 text-amber-600" />
@@ -324,289 +325,169 @@ export const SettingsModal: React.FC = () => {
                     <p className="font-bold text-lg">{upgradeSuccess}</p>
                   </div>
                 ) : isPaymentStep ? (
-                    // Payment Confirmation Step with PayPal
-                    <div className="relative z-10 animate-fade-in">
-                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4">{t('confirmPaymentTitle')}</h4>
-                        
-                        <div className="bg-white/60 dark:bg-slate-900/60 p-5 rounded-xl border border-amber-200 dark:border-amber-800/50 mb-4 backdrop-blur-sm">
-                             <div className="flex justify-between items-center mb-2 border-b border-dashed border-gray-300 dark:border-gray-600 pb-2">
-                                 <span className="text-gray-600 dark:text-gray-300 font-medium">{t('selectedPlan')}</span>
-                                 <span className="font-bold text-gray-900 dark:text-white">{currentPlan?.label}</span>
-                             </div>
-                             <div className="flex justify-between items-center pt-1">
-                                 <span className="text-gray-600 dark:text-gray-300 font-medium">{t('paymentAmount')}</span>
-                                 <span className="font-black text-2xl text-blue-600 dark:text-blue-400">{currentPlan?.priceDisplay}</span>
-                             </div>
-                        </div>
-                        
-                        {paypalError && (
-                             <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm mb-4">
-                                 {paypalError}
-                             </div>
-                        )}
-
-                        {settings.paypalClientId ? (
-                            // CRITICAL: Do NOT render PayPalScriptProvider if environment is invalid (file/blob protocol).
-                            isInvalidEnv ? (
-                                <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm mb-4 border border-amber-200">
-                                    <h4 className="font-bold flex items-center gap-2 mb-1">
-                                        <ExclamationTriangleIcon className="h-5 w-5" />
-                                        Unsupported Environment (不支援的環境)
-                                    </h4>
-                                    <p className="mb-2">PayPal 支付功能需要標準的 Web Server 環境 (http/https)。</p>
-                                    <p className="text-xs opacity-80 break-all mb-3">
-                                        目前執行於: <code className="font-mono bg-amber-100 px-1 rounded">{window.location.protocol}//{window.location.host || 'localhost'}</code>
-                                    </p>
-                                    <p className="text-xs text-amber-700 mb-2">
-                                        您正處於預覽或本機檔案模式，PayPal 安全策略禁止在此環境下載入。
-                                    </p>
-                                    
-                                    <div className="flex flex-col gap-2 mt-3">
-                                        <a 
-                                            href={getTestLink(settings.paypalClientId)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="w-full py-2.5 px-3 bg-white text-blue-600 border border-blue-200 font-bold rounded-lg shadow-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <LinkIcon className="h-4 w-4" />
-                                            在新分頁驗證 Client ID (推薦)
-                                        </a>
-                                        <p className="text-[10px] text-center text-gray-500 mt-1">此按鈕會開啟一個獨立的測試頁面，確認您的 Client ID 是否正確。</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="my-4 min-h-[150px]">
-                                    <PayPalErrorBoundary
-                                        fallback={(err) => (
-                                            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm border border-red-200">
-                                                <p className="font-bold mb-2">PayPal SDK 載入或執行錯誤</p>
-                                                <p className="text-xs mb-3 font-mono break-all">{err.message}</p>
-                                                
-                                                <div className="flex flex-col gap-2">
-                                                    <a 
-                                                        href={getTestLink(settings.paypalClientId)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="w-full py-2 px-3 bg-white text-red-600 border border-red-200 font-bold rounded-lg shadow-sm hover:bg-red-50 transition-colors text-xs flex items-center justify-center gap-2"
-                                                    >
-                                                        <LinkIcon className="h-4 w-4" />
-                                                        在新分頁驗證 Client ID (視覺化測試)
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        )}
-                                    >
-                                        <PayPalScriptProvider 
-                                            options={{ 
-                                                clientId: settings.paypalClientId, 
-                                                currency: "TWD",
-                                                intent: "capture",
-                                                components: "buttons",
-                                                "data-sdk-integration-source": "react-paypal-js"
-                                            }}
-                                            key={settings.paypalClientId} 
-                                        >
-                                        <PayPalPaymentSection 
-                                                amount={currentPlan?.value || "120"}
-                                                description={`AI Property Appraiser - ${currentPlan?.label}`}
-                                                clientId={settings.paypalClientId}
-                                                onApprove={handlePayPalApprove}
-                                                onError={(err: any) => {
-                                                    console.error("PayPal Error:", err);
-                                                    const errMsg = err?.message || String(err);
-                                                    setPaypalError(t('paymentError') + ": " + errMsg);
-                                                }}
-                                        />
-                                        </PayPalScriptProvider>
-                                    </PayPalErrorBoundary>
-                                </div>
-                            )
-                        ) : (
-                            <div className="p-4 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">
-                                {t('paypalNotConfigured')}
-                            </div>
-                        )}
-
-                        <button 
-                            type="button" 
-                            onClick={() => setIsPaymentStep(false)} 
-                            className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                            {t('back')}
-                        </button>
+                  <div className="animate-fade-in">
+                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                        <h4 className="font-bold text-blue-800 dark:text-blue-200 text-sm mb-1">{t('selectedPlan')}: {currentPlan?.label}</h4>
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{currentPlan?.priceDisplay}</p>
                     </div>
+                    
+                    {paypalError && (
+                        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm border border-red-200">
+                            {paypalError}
+                        </div>
+                    )}
+
+                    {settings.paypalClientId ? (
+                        <PayPalErrorBoundary fallback={(err) => <div className="p-4 bg-red-50 text-red-600 text-sm rounded">PayPal Error: {err.message}</div>}>
+                            <PayPalScriptProvider options={{ 
+                                clientId: settings.paypalClientId,
+                                currency: "TWD",
+                                intent: "capture",
+                            }}>
+                                <PayPalPaymentSection 
+                                    clientId={settings.paypalClientId}
+                                    amount={currentPlan?.value || '120'}
+                                    description={`Subscription - ${currentPlan?.label}`}
+                                    onApprove={handlePayPalApprove}
+                                    onError={(err: any) => setPaypalError("PayPal Error: " + JSON.stringify(err))}
+                                />
+                            </PayPalScriptProvider>
+                        </PayPalErrorBoundary>
+                    ) : (
+                        <div className="text-center p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                            <ExclamationTriangleIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-sm text-gray-500">PayPal Client ID 未設定</p>
+                            {currentUser?.role === '管理員' && (
+                                <p className="text-xs text-gray-400 mt-1">請至管理後台設定</p>
+                            )}
+                        </div>
+                    )}
+
+                    <button 
+                        type="button"
+                        onClick={() => setIsPaymentStep(false)}
+                        className="mt-3 w-full py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline"
+                    >
+                        {t('backToPlans')}
+                    </button>
+                  </div>
                 ) : (
-                    // Plan Selection Step
-                    <div className="relative z-10 space-y-4 animate-fade-in">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
-                            {t('upgradeDescription')}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {plans.map(plan => (
-                                <div 
-                                    key={plan.id}
-                                    onClick={() => setSelectedPlan(plan.id)}
-                                    className={`cursor-pointer relative p-3 rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center bg-white/80 dark:bg-slate-800/80 ${selectedPlan === plan.id ? 'border-amber-500 shadow-md scale-105 z-10 ring-2 ring-amber-200 dark:ring-amber-900' : 'border-transparent hover:border-amber-200 dark:hover:border-amber-800 hover:bg-white dark:hover:bg-slate-800 shadow-sm'}`}
-                                >
-                                    {selectedPlan === plan.id && (
-                                        <div className="absolute -top-3 -right-3 bg-amber-500 text-white rounded-full p-1 shadow-sm">
-                                            <CheckCircleIcon className="h-5 w-5" />
-                                        </div>
-                                    )}
-                                    <div className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1">{plan.label}</div>
-                                    <div className="text-amber-600 dark:text-amber-400 font-black text-lg">{plan.priceDisplay}</div>
+                  <div className="space-y-3 animate-fade-in">
+                    {plans.map(plan => (
+                        <label key={plan.id} className={`relative flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPlan === plan.id ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-amber-200'}`}>
+                            <input 
+                                type="radio" 
+                                name="plan" 
+                                value={plan.id} 
+                                checked={selectedPlan === plan.id} 
+                                onChange={(e) => setSelectedPlan(e.target.value)}
+                                className="sr-only"
+                            />
+                            <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === plan.id ? 'border-amber-500' : 'border-gray-300'}`}>
+                                    {selectedPlan === plan.id && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
                                 </div>
-                            ))}
-                        </div>
-                        <button 
-                            type="button" 
-                            onClick={() => setIsPaymentStep(true)}
-                            className="w-full px-4 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all hover:-translate-y-0.5 mt-2 flex items-center justify-center gap-2"
-                        >
-                            {t('upgradeWithPaypal')}
-                        </button>
-                    </div>
+                                <span className={`font-medium ${selectedPlan === plan.id ? 'text-amber-900 dark:text-amber-100' : 'text-gray-700 dark:text-gray-300'}`}>{plan.label}</span>
+                            </div>
+                            <span className={`font-bold ${selectedPlan === plan.id ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>{plan.priceDisplay}</span>
+                        </label>
+                    ))}
+                    
+                    <button
+                        type="button"
+                        onClick={() => setIsPaymentStep(true)}
+                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all transform hover:-translate-y-0.5 mt-2"
+                    >
+                        {t('proceedToPayment')}
+                    </button>
+                  </div>
                 )}
               </fieldset>
             )}
-            
-            {/* Current Subscription Display for Paid Users */}
-            {currentUser?.role === '付費用戶' && currentUser?.subscriptionExpiry && (
-                 <div className="p-5 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-3 mb-2">
-                        <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-                        <span className="font-bold text-lg text-green-900 dark:text-green-100">{t('paidUser')}</span>
-                    </div>
-                    <p className="text-sm text-green-800 dark:text-green-300 ml-9">
-                        {t('subscriptionExpiresOn')}: <span className="font-mono font-bold">{new Date(currentUser.subscriptionExpiry).toLocaleDateString()}</span>
-                    </p>
-                 </div>
-            )}
 
-            {/* API Key Settings */}
-            <fieldset className="space-y-4">
-              <legend className="text-lg font-semibold text-gray-900 dark:text-white">{t('apiKeySettings')}</legend>
-              <div>
-                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
-                    {t('yourGeminiApiKey_linkText')}
-                  </a>
-                  <span className="text-gray-700 dark:text-gray-300 ml-1">({t('yourGeminiApiKey_promptText')})</span>
-                </label>
-                <input
-                  type="password"
-                  id="apiKey"
-                  name="apiKey"
-                  value={localSettings.apiKey}
-                  onChange={handleChange}
-                  placeholder={t('enterYourGeminiApiKey')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('apiKeyPrivacyNotice')}
-                </p>
-              </div>
-               {currentUser?.role === '管理員' && (
-                  <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
-                      <div>
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                name="allowPublicApiKey"
-                                checked={localSettings.allowPublicApiKey}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-200">{t('enableGlobalApiKey')}</span>
+            {/* General Settings */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 mt-2">
+                    {t('preferences')}
+                </h3>
+                
+                {/* Language */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('language')}</label>
+                    <select
+                        name="language"
+                        value={localSettings.language}
+                        onChange={handleChange}
+                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="zh-TW">繁體中文 (Traditional Chinese)</option>
+                        <option value="zh-CN">简体中文 (Simplified Chinese)</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語 (Japanese)</option>
+                    </select>
+                </div>
+
+                {/* API Key (Only if allowed or admin) */}
+                {(currentUser?.role === '管理員' || currentUser?.role === '付費用戶' || settings.allowPublicApiKey) && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Gemini API Key 
+                            {currentUser?.role !== '管理員' && <span className="text-xs text-gray-500 ml-2">({t('optional')})</span>}
                         </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            {t('globalApiKeyNotice')}
+                        <input
+                            type="password"
+                            name="apiKey"
+                            value={localSettings.apiKey}
+                            onChange={handleChange}
+                            placeholder={t('enterApiKey')}
+                            className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {t('apiKeyDescription')} <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>
                         </p>
-                      </div>
-                      {localSettings.allowPublicApiKey && (
-                          <div className="mt-3">
-                               <label htmlFor="publicApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  {t('globalGeminiApiKey')}
-                              </label>
-                              <input
-                                  type="password"
-                                  id="publicApiKey"
-                                  name="publicApiKey"
-                                  value={localSettings.publicApiKey}
-                                  onChange={handleChange}
-                                  placeholder={t('enterGlobalApiKey')}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              />
-                          </div>
-                      )}
-                  </div>
-               )}
-            </fieldset>
+                    </div>
+                )}
 
-            {/* Appearance Settings */}
-            <fieldset className="space-y-4">
-              <legend className="text-lg font-semibold text-gray-900 dark:text-white">{t('appearanceAndDisplay')}</legend>
-              <div>
-                <label htmlFor="theme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('theme')}
-                </label>
-                <select
-                  id="theme"
-                  name="theme"
-                  value={localSettings.theme}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                {/* Theme */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('theme')}</label>
+                    <select
+                        name="theme"
+                        value={localSettings.theme}
+                        onChange={handleChange}
+                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="system">{t('themeSystem')}</option>
+                        <option value="light">{t('themeLight')}</option>
+                        <option value="dark">{t('themeDark')}</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 sticky bottom-0 bg-white dark:bg-gray-800 pb-2">
+                <button
+                    type="button"
+                    onClick={() => setSettingsModalOpen(false)}
+                    className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700"
                 >
-                  <option value="light">{t('theme_light')}</option>
-                  <option value="dark">{t('theme_dark')}</option>
-                  <option value="system">{t('theme_system')}</option>
-                </select>
-              </div>
-              
-              <div>
-                <label htmlFor="font" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('font')}
-                </label>
-                <select
-                  id="font"
-                  name="font"
-                  value={localSettings.font}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    {t('cancel')}
+                </button>
+                <button
+                    type="submit"
+                    disabled={isSaved}
+                    className={`px-5 py-2.5 text-sm font-medium text-white rounded-lg focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all flex items-center gap-2 ${isSaved ? 'bg-green-600' : 'bg-blue-700 hover:bg-blue-800'}`}
                 >
-                  <option value="sans">{t('fontSans')}</option>
-                  <option value="serif">{t('fontSerif')}</option>
-                  <option value="mono">{t('font_mono')}</option>
-                  <option value="kai">{t('font_kai')}</option>
-                  <option value="cursive">{t('font_cursive')}</option>
-                </select>
-              </div>
-               <div>
-                <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('language')}
-                </label>
-                <select
-                  id="language"
-                  name="language"
-                  value={localSettings.language}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="zh-TW">{t('lang_zh-TW')}</option>
-                  <option value="zh-CN">{t('lang_zh-CN')}</option>
-                  <option value="en">{t('lang_en')}</option>
-                  <option value="ja">{t('lang_ja')}</option>
-                </select>
-              </div>
-            </fieldset>
+                    {isSaved ? (
+                        <>
+                            <CheckCircleIcon className="h-5 w-5" />
+                            {t('saved')}
+                        </>
+                    ) : t('save')}
+                </button>
+            </div>
           </form>
         </main>
-        
-        <footer className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end bg-gray-50 dark:bg-gray-800/50">
-            <button type="submit" form="settings-form" className={`px-6 py-3 font-semibold rounded-lg shadow-md transition-colors w-full sm:w-auto ${isSaved ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-              {isSaved ? t('saved') : t('saveSettings')}
-            </button>
-        </footer>
       </div>
     </div>
   );
