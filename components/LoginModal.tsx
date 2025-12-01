@@ -6,6 +6,8 @@ import { SparklesIcon } from './icons/SparklesIcon';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
 import { isSupabaseConfigured } from '../supabaseClient'; 
+import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
 
 // 內建 EyeIcon 與 EyeSlashIcon 以避免新增檔案依賴
 const EyeIcon = ({ className }: { className?: string }) => (
@@ -37,6 +39,7 @@ export const LoginModal: React.FC = () => {
   const [emailStatus, setEmailStatus] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showDbHelp, setShowDbHelp] = useState(false);
 
   useEffect(() => {
     if (isRegister) {
@@ -77,6 +80,7 @@ export const LoginModal: React.FC = () => {
     if (isLoading) return; 
     
     setError('');
+    setShowDbHelp(false);
     
     if (!isSupabaseConfigured) {
         setError('系統未連線至資料庫，無法登入。請聯絡管理員設定 .env。');
@@ -106,6 +110,10 @@ export const LoginModal: React.FC = () => {
              setError(t(result.messageKey));
              if (result.errorDetail) {
                  setError(prev => `${prev} (${result.errorDetail})`);
+                 // Auto-detect database related errors
+                 if (result.errorDetail.toLowerCase().includes('database error') || result.errorDetail.includes('constraint')) {
+                     setShowDbHelp(true);
+                 }
              }
              setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
            } else {
@@ -118,6 +126,9 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
+              if (loginResult.message?.toLowerCase().includes('database error')) {
+                  setShowDbHelp(true);
+              }
           }
         }
     } catch (e) {
@@ -128,7 +139,7 @@ export const LoginModal: React.FC = () => {
     }
   };
   
-  const toggleFormType = () => { setIsRegister(!isRegister); setError(''); setRegistrationSuccess(false); };
+  const toggleFormType = () => { setIsRegister(!isRegister); setError(''); setRegistrationSuccess(false); setShowDbHelp(false); };
   const switchToLoginAfterSuccess = () => { setIsRegister(false); setError(''); setRegistrationSuccess(false); };
 
   const inputClass = "w-full border border-slate-300 dark:border-slate-600 p-3 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:bg-slate-200 disabled:cursor-not-allowed";
@@ -232,8 +243,18 @@ export const LoginModal: React.FC = () => {
                 )}
                 
                 {error && (
-                    <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800 break-words">
-                        {error}
+                    <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded border border-red-200 dark:border-red-800 break-words flex flex-col gap-2">
+                        <span>{error}</span>
+                        {showDbHelp && (
+                            <button 
+                                type="button" 
+                                onClick={() => setShowDbHelp(true)} /* Re-trigger just in case */
+                                className="mt-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-800 py-1 px-2 rounded text-xs font-bold transition-colors"
+                            >
+                                <ExclamationTriangleIcon className="h-3 w-3" />
+                                偵測到資料庫錯誤 - 點此查看修復指令
+                            </button>
+                        )}
                     </div>
                 )}
                 
@@ -263,6 +284,50 @@ export const LoginModal: React.FC = () => {
             {!isSupabaseConfigured && ' - 請檢查 .env 設定'}
         </div>
       </div>
+
+      {/* Database Helper Modal Overlay */}
+      {showDbHelp && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-2xl border-2 border-indigo-500">
+                  <h3 className="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-4 flex items-center gap-2">
+                      <DocumentTextIcon className="h-6 w-6" />
+                      資料庫修復指令 (SQL Setup)
+                  </h3>
+                  <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
+                      <p>系統偵測到資料庫錯誤（通常是 Foreign Key 或 Trigger 設定問題）。</p>
+                      <p>請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行以修復問題。</p>
+                  </div>
+                  <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
+{`-- 1. 解除舊的 Foreign Key (如果有的話)
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+
+-- 2. 重新加入 Foreign Key 並設定連動刪除 (ON DELETE CASCADE)
+ALTER TABLE public.profiles
+ADD CONSTRAINT profiles_id_fkey
+FOREIGN KEY (id) REFERENCES auth.users(id)
+ON DELETE CASCADE;
+
+-- 3. 設定自動新增 Profile 的 Trigger (避免註冊後沒有資料)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name, role, updated_at)
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now());
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();`}
+                  </div>
+                  <div className="flex justify-end">
+                      <button onClick={() => setShowDbHelp(false)} className="px-6 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">關閉</button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

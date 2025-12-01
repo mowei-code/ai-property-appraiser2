@@ -17,6 +17,7 @@ import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon'; 
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; 
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
 
 export const AdminPanel: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, forceReconnect } = useContext(AuthContext);
@@ -38,6 +39,7 @@ export const AdminPanel: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [showSqlHelp, setShowSqlHelp] = useState(false);
   
   // Settings State
   const [paypalClientId, setPaypalClientId] = useState('');
@@ -119,8 +121,7 @@ export const AdminPanel: React.FC = () => {
       result = await addUser({ email, password, role, name, phone });
     } else if (isEditing) {
       const updatedData: Partial<User> = { role, name, phone };
-      // Password update logic usually handled by Auth provider, not direct DB update, 
-      // but for metadata/profile we update here. 
+      if (password) updatedData.password = password;
       
       if (expiryDate) {
           updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
@@ -367,6 +368,17 @@ export const AdminPanel: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Database Fix Tool - New Feature */}
+                    <div className="mb-4">
+                        <button 
+                            onClick={() => setShowSqlHelp(true)}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors"
+                        >
+                            <DocumentTextIcon className="h-4 w-4" />
+                            資料庫修復指令 (必讀)
+                        </button>
+                    </div>
+
                     <div className="space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1">
@@ -493,7 +505,54 @@ export const AdminPanel: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
       {userToDelete && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"><div className="bg-white p-6 rounded shadow-lg"><h3>Confirm Delete?</h3><div className="flex gap-2 mt-4"><button onClick={()=>setUserToDelete(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button></div></div></div>}
+      
+      {/* SQL Helper Modal */}
+      {showSqlHelp && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-2xl border-2 border-indigo-500">
+                  <h3 className="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-4 flex items-center gap-2">
+                      <DocumentTextIcon className="h-6 w-6" />
+                      資料庫修復指令 (SQL Setup)
+                  </h3>
+                  <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
+                      <p>請複製下方代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
+                      <p>這將解決：1. <strong>無法刪除用戶</strong> (錯誤：Delete on table users violates foreign key) 2. <strong>註冊後無資料</strong> 的問題。</p>
+                  </div>
+                  <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
+{`-- 1. 解除舊的 Foreign Key (如果有的話)
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+
+-- 2. 重新加入 Foreign Key 並設定連動刪除 (ON DELETE CASCADE)
+-- 這樣當您在 Supabase 後台刪除 User 時，Profile 也會自動刪除，不會報錯
+ALTER TABLE public.profiles
+ADD CONSTRAINT profiles_id_fkey
+FOREIGN KEY (id) REFERENCES auth.users(id)
+ON DELETE CASCADE;
+
+-- 3. 設定自動新增 Profile 的 Trigger (避免註冊後沒有資料)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name, role, updated_at)
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now());
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();`}
+                  </div>
+                  <div className="flex justify-end">
+                      <button onClick={() => setShowSqlHelp(false)} className="px-6 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">關閉</button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
