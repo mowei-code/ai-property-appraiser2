@@ -43,11 +43,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       try {
           // Fetch profile from public.profiles
-          let { data: profile, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', sessionUser.id)
-              .maybeSingle();
+          let profile = null;
+          try {
+              const { data, error } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', sessionUser.id)
+                  .maybeSingle();
+              if (!error) profile = data;
+          } catch(e) {
+              console.warn("Error fetching profile, attempting heal...", e);
+          }
 
           // Self-Healing: If Auth exists but Profile is missing, create it automatically.
           if (!profile) {
@@ -61,12 +67,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   updated_at: new Date().toISOString()
               };
               
-              const { error: insertError } = await supabase.from('profiles').insert([newProfileData]);
-              if (!insertError) {
-                  // If insert worked, use this data
-                  profile = newProfileData;
-              } else {
-                  console.error("[Auth] Auto-healing failed:", insertError);
+              // Use upsert instead of insert to handle race conditions or zombie data better
+              // We intentionally ignore errors here to allow fallback to memory user
+              try {
+                  const { error: insertError } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'id' });
+                  if (!insertError) {
+                      profile = newProfileData;
+                  } else {
+                      console.error("[Auth] Auto-healing failed (non-fatal):", insertError);
+                  }
+              } catch(e) {
+                  console.error("Auto-healing exception", e);
               }
           }
 
@@ -80,7 +91,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   subscriptionExpiry: profile.subscription_expiry
               });
           } else {
-              // Fallback if healing failed (should rarely happen)
+              // Fallback if healing failed (This allows login even if DB is broken)
               setCurrentUser({
                   id: sessionUser.id,
                   email: sessionUser.email!,
@@ -191,20 +202,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!isSupabaseConfigured) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
 
     try {
-        const targetEmail = details.email.toLowerCase();
-        
-        // 1. Check for orphaned profiles (Zombie Data) and clean them up BEFORE registration
-        // This prevents "duplicate key value violates unique constraint" errors
-        const { data: ghostProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('email', targetEmail)
-            .maybeSingle();
-
-        if (ghostProfile) {
-            console.log("Found ghost profile (Zombie Data), cleaning up...", ghostProfile);
-            await supabase.from('profiles').delete().eq('email', targetEmail);
-        }
+        // SKIP the "Check if user exists in Profile" step entirely.
+        // This is what causes the "Database error finding user" loop if the table is broken.
+        // We let Supabase Auth handle the uniqueness check.
 
         // 2. Attempt Auth Registration
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -217,17 +217,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (signUpError) {
             // Check if user is already registered in Auth
-            if (signUpError.message.includes("already registered")) {
+            if (signUpError.message.includes("already registered") || signUpError.status === 422) {
                  return { success: false, messageKey: 'registrationFailed', message: '此 Email 已註冊，請直接登入。' };
             }
             return { success: false, messageKey: 'registrationFailed', errorDetail: signUpError.message };
         }
 
         if (data.user) {
+            const targetEmail = details.email.toLowerCase();
             // Trigger created the profile automatically via SQL, but we sync roles just in case
             const isAdmin = targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase();
             if (isAdmin) {
-                 await supabase.from('profiles').update({ role: '管理員' }).eq('id', data.user.id);
+                 // Try to set admin, ignore errors if DB broken
+                 try { await supabase.from('profiles').update({ role: '管理員' }).eq('id', data.user.id); } catch(e) {}
             }
             
             // Auto login state

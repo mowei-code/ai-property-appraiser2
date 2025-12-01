@@ -94,10 +94,9 @@ export const LoginModal: React.FC = () => {
     if (isLoading) return; 
     
     setError('');
-    // 注意：這裡不重置 showDbHelp，讓用戶如果手動打開了可以保持打開
+    // 這裡我們不重置 showDbHelp，也不自動開啟它
     
     if (!isSupabaseConfigured) {
-        // 如果此時尚未設定，強制切換到設定頁面
         setShowSupabaseSetup(true);
         setError('請先完成資料庫連線設定。');
         return;
@@ -126,7 +125,7 @@ export const LoginModal: React.FC = () => {
              setError(t(result.messageKey));
              if (result.errorDetail) {
                  setError(prev => `${prev} (${result.errorDetail})`);
-                 // 這裡我們不再自動彈出 setShowDbHelp(true)，只顯示錯誤訊息
+                 // 這裡絕對不自動彈出 SQL 視窗
              }
              setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
            } else {
@@ -139,7 +138,7 @@ export const LoginModal: React.FC = () => {
           const loginResult = await login(email, password);
           if (!loginResult.success) {
               setError(loginResult.message || t('loginFailed'));
-              // 這裡我們不再自動彈出 setShowDbHelp(true)，只顯示錯誤訊息
+              // 這裡絕對不自動彈出 SQL 視窗
           }
         }
     } catch (e) {
