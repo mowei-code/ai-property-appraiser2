@@ -17,7 +17,6 @@ import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon'; 
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon'; 
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
-import { DocumentTextIcon } from './icons/DocumentTextIcon';
 
 export const AdminPanel: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, forceReconnect } = useContext(AuthContext);
@@ -39,7 +38,6 @@ export const AdminPanel: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
-  const [showSqlHelp, setShowSqlHelp] = useState(false);
   
   // Settings State
   const [paypalClientId, setPaypalClientId] = useState('');
@@ -368,17 +366,6 @@ export const AdminPanel: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Database Fix Tool - New Feature */}
-                    <div className="mb-4">
-                        <button 
-                            onClick={() => setShowSqlHelp(true)}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors"
-                        >
-                            <DocumentTextIcon className="h-4 w-4" />
-                            資料庫修復指令 (必讀)
-                        </button>
-                    </div>
-
                     <div className="space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1">
@@ -508,87 +495,6 @@ export const AdminPanel: React.FC = () => {
       
       {/* Delete Confirmation Modal */}
       {userToDelete && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"><div className="bg-white p-6 rounded shadow-lg"><h3>Confirm Delete?</h3><div className="flex gap-2 mt-4"><button onClick={()=>setUserToDelete(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button></div></div></div>}
-      
-      {/* SQL Helper Modal */}
-      {showSqlHelp && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-2xl border-2 border-indigo-500">
-                  <h3 className="text-lg font-bold text-indigo-700 dark:text-indigo-300 mb-4 flex items-center gap-2">
-                      <DocumentTextIcon className="h-6 w-6" />
-                      資料庫修復指令 (SQL Setup) - 加強版
-                  </h3>
-                  <div className="mb-4 text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                      <p>請複製下方<strong>V3 終極版</strong>代碼，貼到 Supabase 的 <strong>SQL Editor</strong> 執行。</p>
-                      <p className="text-red-600 dark:text-red-400 font-bold">此版本會強制補齊缺少的欄位，並鎖定執行路徑，徹底解決寫入失敗問題。</p>
-                  </div>
-                  <div className="bg-gray-900 text-gray-200 p-4 rounded-lg font-mono text-xs overflow-auto h-64 mb-4 select-all">
-{`-- 1. Reset Triggers & Functions (清理舊設定)
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP FUNCTION IF EXISTS public.handle_new_user();
-
--- 2. Ensure Table Exists & Has Correct Columns (確保資料表與欄位存在)
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
-  email text,
-  name text,
-  role text DEFAULT '一般用戶',
-  phone text,
-  subscription_expiry timestamptz,
-  updated_at timestamptz
-);
-
--- Force add columns if they are missing (Fix for existing tables)
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS name text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text DEFAULT '一般用戶';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_expiry timestamptz;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at timestamptz;
-
--- 3. Grants (關鍵：修復權限問題)
-GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
-GRANT ALL ON TABLE public.profiles TO postgres, anon, authenticated, service_role;
-
--- 4. RLS Policies (設定讀寫規則)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
-
--- 允許讀取自己的資料
-CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
--- 允許更新自己的資料
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
--- 允許插入自己的資料 (自我修復用)
-CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
-
--- 5. Trigger Function (設定觸發器，並指定 search_path 以防萬一)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-SECURITY DEFINER SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, name, role, updated_at)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', '一般用戶', now())
-  ON CONFLICT (id) DO UPDATE
-  SET email = EXCLUDED.email,
-      name = EXCLUDED.name,
-      updated_at = now();
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();`}
-                  </div>
-                  <div className="flex justify-end">
-                      <button onClick={() => setShowSqlHelp(false)} className="px-6 py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">關閉</button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 };

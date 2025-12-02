@@ -6,9 +6,7 @@ import { SparklesIcon } from './icons/SparklesIcon';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
 import { isSupabaseConfigured } from '../supabaseClient'; 
-import { CheckCircleIcon } from './icons/CheckCircleIcon';
 
-// Icons
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
@@ -35,21 +33,8 @@ export const LoginModal: React.FC = () => {
   const [generatedCaptcha, setGeneratedCaptcha] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [emailStatus, setEmailStatus] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Connection Setup
-  const [showSupabaseSetup, setShowSupabaseSetup] = useState(!isSupabaseConfigured);
-  const [sbUrl, setSbUrl] = useState('');
-  const [sbKey, setSbKey] = useState('');
-
-  useEffect(() => {
-    const savedUrl = localStorage.getItem('app_supabase_url');
-    const savedKey = localStorage.getItem('app_supabase_anon_key');
-    if (savedUrl) setSbUrl(savedUrl);
-    if (savedKey) setSbKey(savedKey);
-  }, []);
 
   useEffect(() => {
     if (isRegister) {
@@ -57,7 +42,6 @@ export const LoginModal: React.FC = () => {
         setPhone(settings.language === 'zh-TW' ? '886-' : '');
     } else {
         setRegistrationSuccess(false);
-        setEmailStatus('');
     }
   }, [isRegister, settings.language]);
 
@@ -81,8 +65,7 @@ export const LoginModal: React.FC = () => {
     setError('');
     
     if (!isSupabaseConfigured) {
-        setShowSupabaseSetup(true);
-        setError('請先完成資料庫連線設定。');
+        setError('未設定 Supabase 連線 (.env)');
         return;
     }
 
@@ -106,7 +89,7 @@ export const LoginModal: React.FC = () => {
 
            const result = await register({ email, password, name, phone });
            if (!result.success) {
-             setError(t(result.messageKey) + (result.errorDetail ? `: ${result.errorDetail}` : ''));
+             setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
              setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
            } else {
                setRegistrationSuccess(true);
@@ -126,17 +109,6 @@ export const LoginModal: React.FC = () => {
     }
   };
   
-  const handleSaveSupabaseConfig = () => {
-      if(!sbUrl || !sbKey) { setError('請填寫 URL 與 Key'); return; }
-      try {
-          new URL(sbUrl);
-          localStorage.setItem('app_supabase_url', sbUrl.trim());
-          localStorage.setItem('app_supabase_anon_key', sbKey.trim());
-          alert('設定已儲存，頁面將重新整理以套用。');
-          window.location.reload();
-      } catch (e) { setError('無效的 URL 格式'); }
-  };
-  
   const toggleFormType = () => { setIsRegister(!isRegister); setError(''); setRegistrationSuccess(false); };
   const inputClass = "w-full border border-slate-300 dark:border-slate-600 p-3 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:bg-slate-200 disabled:cursor-not-allowed";
 
@@ -149,36 +121,7 @@ export const LoginModal: React.FC = () => {
         </header>
 
         <div className="p-6 space-y-4">
-          
-          {showSupabaseSetup ? (
-              <div className="space-y-4 animate-fade-in">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <h3 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-2 flex items-center gap-2">
-                          <CheckCircleIcon className="h-4 w-4" />
-                          初始化系統連線 (Supabase)
-                      </h3>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">首次使用或 .env 未設定時，請在此輸入您的連線資訊。</p>
-                      
-                      <div className="space-y-3">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 mb-1">Project URL</label>
-                              <input type="text" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://your-project.supabase.co" className={inputClass + " text-sm"} />
-                          </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 mb-1">Anon Key (public)</label>
-                              <input type="password" value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="eyJh..." className={inputClass + " text-sm"} />
-                          </div>
-                      </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                      {isSupabaseConfigured && (
-                          <button onClick={() => setShowSupabaseSetup(false)} className="w-1/3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-bold text-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">返回</button>
-                      )}
-                      <button onClick={handleSaveSupabaseConfig} className={`py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-md ${isSupabaseConfigured ? 'w-2/3' : 'w-full'}`}>儲存設定並重整頁面</button>
-                  </div>
-              </div>
-          ) : registrationSuccess ? (
+          {registrationSuccess ? (
               <div className="text-center space-y-6">
                   <p className="text-lg font-bold text-green-600 dark:text-green-400">{t('registrationSuccess')}</p>
                   <p className="text-gray-600 dark:text-gray-300">{t('registrationSuccessPrompt')}</p>
@@ -193,27 +136,23 @@ export const LoginModal: React.FC = () => {
                     </>
                 )}
                 <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t('email')} className={inputClass} required disabled={!isSupabaseConfigured} />
-                
                 <div className="relative">
                     <input type={showPassword ? "text" : "password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder={t('password')} className={inputClass} required disabled={!isSupabaseConfigured} />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1" tabIndex={-1} disabled={!isSupabaseConfigured}>
                         {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
                     </button>
                 </div>
-
                 {isRegister && (
                     <div className="flex gap-2">
                         <input type="text" value={captcha} onChange={e=>setCaptcha(e.target.value)} placeholder={t('captcha')} className={inputClass} disabled={!isSupabaseConfigured} />
                         <div className="bg-gray-200 dark:bg-slate-600 dark:text-white p-3 rounded-lg flex items-center justify-center font-mono font-bold tracking-widest select-none w-1/3">{generatedCaptcha}</div>
                     </div>
                 )}
-                
                 {error && (
                     <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded border border-red-200 dark:border-red-800 break-words">
                         {error}
                     </div>
                 )}
-                
                 <button type="submit" disabled={isLoading || !isSupabaseConfigured} className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading || !isSupabaseConfigured ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
                     {isLoading && <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>}
                     {isRegister ? t('register') : t('login')}
@@ -222,16 +161,9 @@ export const LoginModal: React.FC = () => {
                     <p className="cursor-pointer text-blue-600 dark:text-blue-400 hover:underline" onClick={toggleFormType}>
                         {isRegister ? t('clickToLogin') : t('clickToRegister')}
                     </p>
-                    {isSupabaseConfigured && (
-                        <button type="button" onClick={() => setShowSupabaseSetup(true)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs">重設連線</button>
-                    )}
                 </div>
             </form>
           )}
-        </div>
-        
-        <div className={`px-4 py-2 text-[10px] text-center border-t ${isSupabaseConfigured ? 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
-            系統狀態: {isSupabaseConfigured ? '雲端資料庫已連線' : '等待連線設定...'}
         </div>
       </div>
     </div>
