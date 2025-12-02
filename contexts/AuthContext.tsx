@@ -1,429 +1,248 @@
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
-import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
-import { SettingsContext, Settings } from '../contexts/SettingsContext';
-import { AuthContext } from '../contexts/AuthContext';
-import { XMarkIcon } from './icons/XMarkIcon';
-import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
-import { SparklesIcon } from './icons/SparklesIcon';
-import { CheckCircleIcon } from './icons/CheckCircleIcon';
-import { ArrowPathIcon } from './icons/ArrowPathIcon';
-import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 
-// --- Error Boundary for PayPal ---
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-  fallback: (error: Error) => ReactNode;
+import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import type { User, UserRole } from '../types';
+
+interface AuthResult {
+  success: boolean;
+  messageKey: string;
+  message?: string;
+  errorDetail?: string;
 }
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
+interface AuthContextType {
+  currentUser: User | null;
+  users: User[];
+  login: (email: string, pass: string) => Promise<AuthResult>;
+  logout: () => void;
+  register: (details: { email: string; password: string; name: string; phone: string; }) => Promise<AuthResult>;
+  isLoginModalOpen: boolean;
+  setLoginModalOpen: (isOpen: boolean) => void;
+  isAdminPanelOpen: boolean;
+  setAdminPanelOpen: (isOpen: boolean) => void;
+  addUser: (details: { email: string; password: string; role: UserRole; name: string; phone: string }) => Promise<AuthResult>;
+  updateUser: (email: string, updates: Partial<User>) => Promise<AuthResult>;
+  deleteUser: (email: string) => Promise<AuthResult>;
+  refreshUsers: () => Promise<void>;
+  forceReconnect: () => void;
 }
 
-class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
+export const AuthContext = createContext<AuthContextType>(null!);
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
+const SYSTEM_ADMIN_EMAIL = 'admin@mazylab.com';
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("PayPal SDK Crash caught by boundary:", error, errorInfo);
-  }
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoginModalOpen, setLoginModalOpen] = useState(false);
+  const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback(this.state.error!);
-    }
-    return this.props.children || null;
-  }
-}
+  // 標準流程：取得使用者 Profile
+  const fetchProfile = useCallback(async (sessionUser: any) => {
+      if (!sessionUser) return;
 
-// --- Sub-component for PayPal Logic ---
-const PayPalPaymentSection: React.FC<{ 
-    amount: string, 
-    description: string, 
-    clientId: string,
-    onApprove: (data: any, actions: any) => Promise<void>,
-    onError: (err: any) => void 
-}> = ({ amount, description, clientId, onApprove, onError }) => {
-    const [{ isPending, isRejected }, dispatch] = usePayPalScriptReducer();
+      try {
+          // 1. 嘗試從 profiles 資料表讀取
+          const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', sessionUser.id)
+              .single();
 
-    const handleRetry = () => {
-        dispatch({
-            type: "resetOptions",
-            value: {
-                clientId: clientId,
-                currency: "TWD",
-                intent: "capture",
-                components: "buttons",
-                "data-sdk-integration-source": "react-paypal-js"
-            }
-        } as any);
-    };
+          if (profile) {
+              setCurrentUser({
+                  id: profile.id,
+                  email: profile.email,
+                  role: profile.role as UserRole,
+                  name: profile.name,
+                  phone: profile.phone,
+                  subscriptionExpiry: profile.subscription_expiry
+              });
+          } else {
+              // 2. 若無 Profile (可能是 Trigger 未觸發)，嘗試手動補建 (最基本的防呆，不報錯)
+              const newProfile = {
+                  id: sessionUser.id,
+                  email: sessionUser.email,
+                  name: sessionUser.user_metadata?.name || '',
+                  role: sessionUser.email === SYSTEM_ADMIN_EMAIL ? '管理員' : '一般用戶',
+                  updated_at: new Date().toISOString()
+              };
+              
+              // 嘗試寫入，若失敗則僅在 Console 顯示，不阻擋用戶使用基本功能
+              const { error: insertError } = await supabase.from('profiles').upsert([newProfile]);
+              
+              if (!insertError) {
+                  setCurrentUser({ ...newProfile, role: newProfile.role as UserRole });
+              } else {
+                  console.warn("Profile creation failed (silent fallback):", insertError);
+                  // 降級模式：使用 Session 資訊建立暫時 User 物件
+                  setCurrentUser({
+                      id: sessionUser.id,
+                      email: sessionUser.email,
+                      role: '一般用戶',
+                      name: sessionUser.user_metadata?.name
+                  });
+              }
+          }
+      } catch (e) {
+          console.error("Error in fetchProfile:", e);
+      }
+  }, []);
 
-    if (isRejected) {
-        return (
-            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm mb-4 border border-red-200 flex flex-col items-start gap-2">
-                <strong>Failed to load PayPal SDK.</strong>
-                <p>This usually happens if the <b>Client ID</b> is invalid or the environment is restricted.</p>
-                {clientId.startsWith('E') && (
-                    <p className="text-red-700 font-bold">
-                        Warning: Your ID starts with 'E'. You might have used the Secret Key instead of the Client ID.
-                    </p>
-                )}
-                <p className="font-mono text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                    Current ID: {clientId.substring(0, 8)}...
-                </p>
-                
-                <div className="flex gap-2 mt-2">
-                    <button 
-                        onClick={handleRetry}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 transition-colors"
-                    >
-                        <ArrowPathIcon className="h-4 w-4" />
-                        Retry Loading
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (isPending) {
-         return (
-            <div className="flex justify-center p-4">
-                <svg className="animate-spin h-6 w-6 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-         );
-    }
-
-    return (
-        <PayPalButtons 
-            style={{ layout: "vertical" }}
-            createOrder={(data, actions) => {
-                return actions.order.create({
-                    intent: "CAPTURE",
-                    purchase_units: [
-                        {
-                            amount: {
-                                currency_code: "TWD",
-                                value: amount
-                            },
-                            description: description
-                        },
-                    ],
-                });
-            }}
-            onApprove={onApprove}
-            onError={onError}
-        />
-    );
-};
-
-export const SettingsModal: React.FC = () => {
-  const { settings, saveSettings, isSettingsModalOpen, setSettingsModalOpen, t } = useContext(SettingsContext);
-  const { currentUser, updateUser } = useContext(AuthContext);
-  const [localSettings, setLocalSettings] = useState<Settings>(settings);
-  const [isSaved, setIsSaved] = useState(false);
-  const [upgradeSuccess, setUpgradeSuccess] = useState('');
-  
-  // Subscription State
-  const [selectedPlan, setSelectedPlan] = useState<string>('monthly');
-  const [isPaymentStep, setIsPaymentStep] = useState(false);
-  const [paypalError, setPaypalError] = useState('');
+  const fetchUsers = useCallback(async () => {
+    if (!isSupabaseConfigured || !currentUser || currentUser.role !== '管理員') return;
+    try {
+        const { data, error } = await supabase.from('profiles').select('*');
+        if (!error && data) {
+            const mappedUsers: User[] = data.map((u: any) => ({
+                id: u.id,
+                email: u.email,
+                role: u.role as UserRole,
+                name: u.name,
+                phone: u.phone,
+                subscriptionExpiry: u.subscription_expiry,
+            })).sort((a, b) => new Date(b.subscriptionExpiry || 0).getTime() - new Date(a.subscriptionExpiry || 0).getTime());
+            setUsers(mappedUsers);
+        }
+    } catch(e) { console.error("Admin fetch users failed", e); }
+  }, [currentUser]);
 
   useEffect(() => {
-    setLocalSettings(settings);
-    setUpgradeSuccess(''); // Reset on modal open
-    setIsPaymentStep(false);
-    setSelectedPlan('monthly');
-    setPaypalError('');
-  }, [settings, isSettingsModalOpen]);
+    const initAuth = async () => {
+        if (isSupabaseConfigured) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                await fetchProfile(session.user);
+            }
+        }
+    };
+    initAuth();
+  }, [fetchProfile]);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveSettings(localSettings);
-    setIsSaved(true);
-    setTimeout(() => {
-        setIsSaved(false);
-        setSettingsModalOpen(false);
-    }, 1500);
-  };
+  useEffect(() => {
+      if (!isSupabaseConfigured) return;
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_OUT') {
+              setCurrentUser(null);
+              setUsers([]);
+              setAdminPanelOpen(false);
+          } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+               await fetchProfile(session.user);
+          }
+      });
+      return () => { subscription.unsubscribe(); };
+  }, [fetchProfile]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-        const { checked } = e.target as HTMLInputElement;
-        setLocalSettings(prev => ({ ...prev, [name]: checked }));
-    } else {
-        setLocalSettings(prev => ({ ...prev, [name]: value as any }));
+  useEffect(() => {
+      if (currentUser?.role === '管理員') fetchUsers();
+  }, [currentUser, fetchUsers]);
+
+  const forceReconnect = async () => { window.location.reload(); };
+
+  const login = async (emailInput: string, passInput: string): Promise<AuthResult> => {
+    const email = emailInput.trim();
+    const pass = passInput.trim();
+    if (!isSupabaseConfigured) return { success: false, messageKey: 'loginFailed', message: '未設定 Supabase 連線' };
+
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+        if (error) return { success: false, messageKey: 'loginFailed', message: error.message };
+        
+        if (data.user) {
+            await fetchProfile(data.user);
+            setLoginModalOpen(false);
+            return { success: true, messageKey: 'loginSuccess' };
+        }
+        return { success: false, messageKey: 'loginFailed', message: 'Unknown error' };
+    } catch (e: any) {
+        return { success: false, messageKey: 'loginFailed', message: e.message };
     }
   };
 
-  const plans = [
-      { id: 'monthly', label: t('planMonthly'), priceDisplay: 'NT$120', value: '120' },
-      { id: 'biannual', label: t('planBiannual'), priceDisplay: 'NT$560', value: '560' },
-      { id: 'yearly', label: t('planYearly'), priceDisplay: 'NT$960', value: '960' },
-  ];
+  const logout = async () => {
+    if (isSupabaseConfigured) await supabase.auth.signOut();
+    setCurrentUser(null);
+    setUsers([]);
+    setAdminPanelOpen(false);
+  };
 
-  const currentPlan = plans.find(p => p.id === selectedPlan);
+  const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
+    if (!isSupabaseConfigured) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
 
-  const handlePayPalApprove = async (data: any, actions: any) => {
+    try {
+        const { data, error } = await supabase.auth.signUp({
+            email: details.email,
+            password: details.password,
+            options: { data: { name: details.name, phone: details.phone } }
+        });
+
+        if (error) {
+            return { success: false, messageKey: 'registrationFailed', message: error.message };
+        }
+
+        if (data.user) {
+            await fetchProfile(data.user);
+            setLoginModalOpen(false);
+            return { success: true, messageKey: 'registrationSuccess' };
+        }
+        
+        return { success: false, messageKey: 'registrationFailed', message: '請檢查信箱驗證信' };
+
+    } catch (error: any) {
+        return { success: false, messageKey: 'registrationFailed', errorDetail: error.message };
+    }
+  };
+
+  const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
+      // 簡單實作：純粹回傳提示，請使用前端註冊功能
+      return { success: false, messageKey: 'registrationFailed', message: '請使用前端註冊功能' };
+  };
+
+  const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
+      if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
       try {
-          await actions.order.capture();
-          
-          // Real Upgrade Logic
-          if (currentUser) {
-            let daysToAdd = 30;
-            if (selectedPlan === 'biannual') daysToAdd = 120;
-            if (selectedPlan === 'yearly') daysToAdd = 365;
+          const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).single();
+          if (!targetUser) return { success: false, messageKey: 'userNotFound' };
 
-            const now = new Date();
-            let newExpiryDate = now;
-            
-            if (currentUser.subscriptionExpiry) {
-                const currentExpiry = new Date(currentUser.subscriptionExpiry);
-                if (currentExpiry > now) {
-                    newExpiryDate = currentExpiry;
-                }
-            }
-            
-            newExpiryDate.setDate(newExpiryDate.getDate() + daysToAdd);
+          const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
+          delete dbUpdates.id; 
+          delete dbUpdates.email; 
+          delete dbUpdates.password; 
 
-            const result = await updateUser(currentUser.email, { 
-                role: '付費用戶',
-                subscriptionExpiry: newExpiryDate.toISOString()
-            });
+          const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
+          if (error) throw error;
 
-            if (result.success) {
-                setUpgradeSuccess(t('upgradeSuccess'));
-                setPaypalError('');
-            } else {
-                setPaypalError("Upgrade failed locally: " + t(result.messageKey));
-            }
+          await fetchUsers();
+          if (currentUser?.email === email) {
+              setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
           }
-
-      } catch (err: any) {
-          console.error("PayPal Capture Error:", err);
-          setPaypalError(t('paymentFailed'));
+          return { success: true, messageKey: 'updateUserSuccess' };
+      } catch (e: any) {
+          return { success: false, messageKey: 'updateUserSuccess', message: e.message };
       }
   };
 
-  if (!isSettingsModalOpen) return null;
+  const deleteUser = async (email: string): Promise<AuthResult> => {
+      if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
+      try {
+          const { error } = await supabase.from('profiles').delete().eq('email', email);
+          if (error) throw error;
+          await fetchUsers();
+          return { success: true, messageKey: 'deleteUserSuccess', message: '資料已清除' };
+      } catch (e: any) {
+          return { success: false, messageKey: 'deleteUserSuccess', message: e.message };
+      }
+  };
 
   return (
-     <div 
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={() => setSettingsModalOpen(false)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-    >
-      <div 
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl flex flex-col overflow-hidden border border-orange-400 dark:border-orange-500 max-h-[90vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 id="settings-title" className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <Cog6ToothIcon className="h-6 w-6 text-blue-600" />
-                {t('settings')}
-            </h2>
-            <button onClick={() => setSettingsModalOpen(false)} className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('close')}>
-                <XMarkIcon className="h-6 w-6 dark:text-gray-300" />
-            </button>
-        </header>
-        
-        <main className="flex-grow p-6 overflow-y-auto">
-          <form id="settings-form" onSubmit={handleSave} className="space-y-6">
-            {/* Account Upgrade Section for General Users */}
-            {(currentUser?.role as string) === '一般用戶' && (
-              <fieldset className="space-y-4 p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border-2 border-amber-300 dark:border-amber-700/50 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 p-2 opacity-10">
-                    <SparklesIcon className="h-24 w-24 text-amber-600" />
-                 </div>
-                <legend className="relative z-10 text-lg font-bold text-amber-800 dark:text-amber-400 flex items-center gap-2">
-                  <SparklesIcon className="h-5 w-5" />
-                  {t('upgradeAccount')}
-                </legend>
-                
-                {upgradeSuccess ? (
-                  <div className="p-6 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-xl text-center animate-fade-in">
-                    <div className="flex justify-center mb-3">
-                        <CheckCircleIcon className="h-12 w-12 text-green-600 dark:text-green-400" />
-                    </div>
-                    <p className="font-bold text-lg">{upgradeSuccess}</p>
-                  </div>
-                ) : isPaymentStep ? (
-                  <div className="animate-fade-in">
-                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                        <h4 className="font-bold text-blue-800 dark:text-blue-200 text-sm mb-1">{t('selectedPlan')}: {currentPlan?.label}</h4>
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{currentPlan?.priceDisplay}</p>
-                    </div>
-                    
-                    {paypalError && (
-                        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm border border-red-200">
-                            {paypalError}
-                        </div>
-                    )}
-
-                    {settings.paypalClientId ? (
-                        <PayPalErrorBoundary fallback={(err) => <div className="p-4 bg-red-50 text-red-600 text-sm rounded">PayPal Error: {err.message}</div>}>
-                            <PayPalScriptProvider options={{ 
-                                clientId: settings.paypalClientId,
-                                currency: "TWD",
-                                intent: "capture",
-                            }}>
-                                <PayPalPaymentSection 
-                                    clientId={settings.paypalClientId}
-                                    amount={currentPlan?.value || '120'}
-                                    description={`Subscription - ${currentPlan?.label}`}
-                                    onApprove={handlePayPalApprove}
-                                    onError={(err: any) => setPaypalError("PayPal Error: " + JSON.stringify(err))}
-                                />
-                            </PayPalScriptProvider>
-                        </PayPalErrorBoundary>
-                    ) : (
-                        <div className="text-center p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                            <ExclamationTriangleIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-sm text-gray-500">PayPal Client ID 未設定</p>
-                            {currentUser?.role === '管理員' && (
-                                <p className="text-xs text-gray-400 mt-1">請至管理後台設定</p>
-                            )}
-                        </div>
-                    )}
-
-                    <button 
-                        type="button"
-                        onClick={() => setIsPaymentStep(false)}
-                        className="mt-3 w-full py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline"
-                    >
-                        {t('backToPlans')}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3 animate-fade-in">
-                    {plans.map(plan => (
-                        <label key={plan.id} className={`relative flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPlan === plan.id ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-amber-200'}`}>
-                            <input 
-                                type="radio" 
-                                name="plan" 
-                                value={plan.id} 
-                                checked={selectedPlan === plan.id} 
-                                onChange={(e) => setSelectedPlan(e.target.value)}
-                                className="sr-only"
-                            />
-                            <div className="flex items-center gap-3">
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === plan.id ? 'border-amber-500' : 'border-gray-300'}`}>
-                                    {selectedPlan === plan.id && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
-                                </div>
-                                <span className={`font-medium ${selectedPlan === plan.id ? 'text-amber-900 dark:text-amber-100' : 'text-gray-700 dark:text-gray-300'}`}>{plan.label}</span>
-                            </div>
-                            <span className={`font-bold ${selectedPlan === plan.id ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>{plan.priceDisplay}</span>
-                        </label>
-                    ))}
-                    
-                    <button
-                        type="button"
-                        onClick={() => setIsPaymentStep(true)}
-                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all transform hover:-translate-y-0.5 mt-2"
-                    >
-                        {t('proceedToPayment')}
-                    </button>
-                  </div>
-                )}
-              </fieldset>
-            )}
-
-            {/* General Settings */}
-            <div className="space-y-4">
-                <h3 className="font-bold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 mt-2">
-                    {t('preferences')}
-                </h3>
-                
-                {/* Language */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('language')}</label>
-                    <select
-                        name="language"
-                        value={localSettings.language}
-                        onChange={handleChange}
-                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    >
-                        <option value="zh-TW">繁體中文 (Traditional Chinese)</option>
-                        <option value="zh-CN">简体中文 (Simplified Chinese)</option>
-                        <option value="en">English</option>
-                        <option value="ja">日本語 (Japanese)</option>
-                    </select>
-                </div>
-
-                {/* API Key (Only if allowed or admin) */}
-                {(currentUser?.role === '管理員' || currentUser?.role === '付費用戶' || settings.allowPublicApiKey) && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Gemini API Key 
-                            {currentUser?.role !== '管理員' && <span className="text-xs text-gray-500 ml-2">({t('optional')})</span>}
-                        </label>
-                        <input
-                            type="password"
-                            name="apiKey"
-                            value={localSettings.apiKey}
-                            onChange={handleChange}
-                            placeholder={t('enterApiKey')}
-                            className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {t('apiKeyDescription')} <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>
-                        </p>
-                    </div>
-                )}
-
-                {/* Theme */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('theme')}</label>
-                    <select
-                        name="theme"
-                        value={localSettings.theme}
-                        onChange={handleChange}
-                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    >
-                        <option value="system">{t('themeSystem')}</option>
-                        <option value="light">{t('themeLight')}</option>
-                        <option value="dark">{t('themeDark')}</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Save Button */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 sticky bottom-0 bg-white dark:bg-gray-800 pb-2">
-                <button
-                    type="button"
-                    onClick={() => setSettingsModalOpen(false)}
-                    className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700"
-                >
-                    {t('cancel')}
-                </button>
-                <button
-                    type="submit"
-                    disabled={isSaved}
-                    className={`px-5 py-2.5 text-sm font-medium text-white rounded-lg focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all flex items-center gap-2 ${isSaved ? 'bg-green-600' : 'bg-blue-700 hover:bg-blue-800'}`}
-                >
-                    {isSaved ? (
-                        <>
-                            <CheckCircleIcon className="h-5 w-5" />
-                            {t('saved')}
-                        </>
-                    ) : t('save')}
-                </button>
-            </div>
-          </form>
-        </main>
-      </div>
-    </div>
+    <AuthContext.Provider value={{
+      currentUser, users, login, logout, register,
+      isLoginModalOpen, setLoginModalOpen,
+      isAdminPanelOpen, setAdminPanelOpen,
+      addUser, updateUser, deleteUser,
+      refreshUsers: fetchUsers, forceReconnect
+    }}>
+      {children}
+    </AuthContext.Provider>
   );
 };
