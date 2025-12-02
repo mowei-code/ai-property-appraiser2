@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
@@ -8,7 +8,6 @@ import { SparklesIcon } from './icons/SparklesIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
-import { LinkIcon } from './icons/LinkIcon';
 
 // --- Error Boundary for PayPal ---
 interface ErrorBoundaryProps {
@@ -21,7 +20,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false,
     error: null
@@ -138,9 +137,6 @@ export const SettingsModal: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<string>('monthly');
   const [isPaymentStep, setIsPaymentStep] = useState(false);
   const [paypalError, setPaypalError] = useState('');
-  
-  // Environment Check
-  const isInvalidEnv = !window.location.protocol.startsWith('http');
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -217,66 +213,6 @@ export const SettingsModal: React.FC = () => {
           console.error("PayPal Capture Error:", err);
           setPaypalError(t('paymentFailed'));
       }
-  };
-
-  // Helper to create a data URI for testing PayPal ID in a new tab without server
-  const getTestLink = (clientId: string) => {
-      const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PayPal Connection Test</title>
-    <script src="https://www.paypal.com/sdk/js?client-id=${clientId}&currency=TWD&components=buttons&debug=true"></script>
-    <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f3f4f6; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 90%; border: 1px solid #e5e7eb; }
-        .client-id { background: #f9fafb; padding: 0.5rem; border-radius: 6px; font-family: monospace; color: #6b7280; word-break: break-all; margin-bottom: 1.5rem; font-size: 0.8rem; border: 1px solid #d1d5db; }
-        #paypal-button-container { margin-top: 1.5rem; min-height: 50px; }
-        .status { margin-bottom: 1rem; padding: 1rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; }
-        .status.loading { background-color: #e0f2fe; color: #0369a1; }
-        .status.success { background-color: #dcfce7; color: #15803d; }
-        .status.warning { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
-        .status.error { background-color: #fee2e2; color: #b91c1c; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>PayPal 連線測試</h2>
-        <div class="client-id">ID: ${clientId}</div>
-        <div id="status" class="status loading">正在連線 PayPal SDK...</div>
-        <div id="paypal-button-container"></div>
-    </div>
-    <script>
-        const statusEl = document.getElementById('status');
-        window.onload = function() {
-            if (window.paypal) {
-                statusEl.textContent = "✅ SDK 載入成功！Client ID 有效。";
-                statusEl.className = "status success";
-                
-                // Attempt to render button (might fail in sandbox data-uri)
-                try {
-                    paypal.Buttons({
-                        style: { layout: 'vertical' },
-                        createOrder: function(data, actions) { return actions.order.create({ purchase_units: [{ amount: { value: '1.00' } }] }); }
-                    }).render('#paypal-button-container').catch(e => {
-                        console.warn("Render blocked (expected in sandbox):", e);
-                        statusEl.innerHTML = "✅ <b>連線成功！ID 正確。</b><br><span style='font-size:0.8em; font-weight:normal'>(按鈕渲染受瀏覽器安全限制阻擋，但 ID 驗證已通過)</span>";
-                        statusEl.className = "status success"; 
-                    });
-                } catch(e) {
-                    // Ignore render errors if SDK loaded fine
-                }
-            } else {
-                statusEl.innerHTML = "❌ SDK 載入失敗。<br><span style='font-size:0.8em; font-weight:normal'>請檢查網路或確認 ID 是否正確。</span>";
-                statusEl.className = "status error";
-            }
-        };
-    </script>
-</body>
-</html>`;
-      return `data:text/html;base64,${btoa(unescape(encodeURIComponent(htmlContent)))}`;
   };
 
   if (!isSettingsModalOpen) return null;
