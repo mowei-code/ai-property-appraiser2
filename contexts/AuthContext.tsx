@@ -41,20 +41,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fetchProfile = useCallback(async (sessionUser: any) => {
       if (!sessionUser) return;
 
+      // *** 超級管理員強制後門 ***
+      // 如果登入的是 admin，無論資料庫發生什麼錯誤 (Schema error, Network error)，
+      // 都強制給予管理員權限，確保能進入系統修復。
+      if (sessionUser.email === SYSTEM_ADMIN_EMAIL) {
+          console.log("Admin login detected - activating resilient mode.");
+          setCurrentUser({
+              id: sessionUser.id,
+              email: sessionUser.email,
+              role: '管理員',
+              name: sessionUser.user_metadata?.name || 'Admin',
+              phone: sessionUser.user_metadata?.phone || '',
+              subscriptionExpiry: null // Admin never expires
+          });
+          
+          // 雖然已經強制登入，但我們還是在背景嘗試同步資料庫，不讓錯誤阻擋 UI
+          try {
+             const { data } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).maybeSingle();
+             if (!data) {
+                 // 自動補建 Admin Profile
+                 await supabase.from('profiles').upsert([{
+                     id: sessionUser.id,
+                     email: sessionUser.email,
+                     role: '管理員',
+                     name: 'Admin',
+                     updated_at: new Date().toISOString()
+                 }]);
+             }
+          } catch (e) {
+              console.warn("Background admin profile sync failed (non-fatal):", e);
+          }
+          return;
+      }
+
+      // 一般用戶流程
       try {
-          // 1. 嘗試從 profiles 資料表讀取
-          // 使用 maybeSingle() 避免無資料時報錯，並捕捉所有資料庫錯誤
           const { data: profile, error } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', sessionUser.id)
               .maybeSingle();
 
-          // 如果有嚴重錯誤 (例如 table 不存在)，拋出異常進入 catch 區塊
-          if (error) {
-              console.warn("Database error (non-fatal):", error.message);
-              throw error; 
-          }
+          if (error) throw error;
 
           if (profile) {
               setCurrentUser({
@@ -66,39 +94,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   subscriptionExpiry: profile.subscription_expiry
               });
           } else {
-              // 2. 若無 Profile，嘗試寫入 (自動修復)
+              // 若無 Profile，嘗試補建
               const newProfile = {
                   id: sessionUser.id,
                   email: sessionUser.email,
                   name: sessionUser.user_metadata?.name || '',
-                  role: sessionUser.email === SYSTEM_ADMIN_EMAIL ? '管理員' : '一般用戶',
+                  role: '一般用戶',
                   phone: sessionUser.user_metadata?.phone || '',
                   updated_at: new Date().toISOString()
               };
               
-              // 嘗試寫入，若失敗則僅在 Console 顯示，不阻擋用戶
               const { error: insertError } = await supabase.from('profiles').upsert([newProfile]);
               
               if (!insertError) {
-                  setCurrentUser({ ...newProfile, role: newProfile.role as UserRole });
+                  setCurrentUser({ ...newProfile, role: '一般用戶' as UserRole });
               } else {
-                  console.warn("Profile creation failed (silent fallback):", insertError);
-                  // 降級模式：使用 Session 資訊建立暫時 User 物件
-                  throw new Error("Fallback to session");
+                  // 降級模式：使用 Session 資訊
+                  console.warn("Profile creation failed, falling back to session:", insertError);
+                  setCurrentUser({
+                      id: sessionUser.id,
+                      email: sessionUser.email,
+                      role: '一般用戶',
+                      name: sessionUser.user_metadata?.name,
+                      phone: sessionUser.user_metadata?.phone
+                  });
               }
           }
-      } catch (e) {
-          // *** 最終防呆機制 ***
-          // 無論資料庫發生什麼事 (Table 不存在、權限錯誤、連線失敗)
-          // 都強制允許使用者登入，只使用 Session 中的基本資料
-          console.error("Critical Auth Warning (Fallback active):", e);
-          
+      } catch (e: any) {
+          console.error("Critical Auth Error:", e.message);
+          // 發生嚴重資料庫錯誤時，允許用戶以「一般用戶」身分登入，避免卡死
           setCurrentUser({
               id: sessionUser.id,
               email: sessionUser.email,
-              role: sessionUser.email === SYSTEM_ADMIN_EMAIL ? '管理員' : '一般用戶',
+              role: '一般用戶',
               name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0],
-              phone: sessionUser.user_metadata?.phone || ''
+              phone: sessionUser.user_metadata?.phone
           });
       }
   }, []);

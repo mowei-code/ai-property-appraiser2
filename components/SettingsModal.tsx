@@ -1,4 +1,5 @@
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
+
+import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
@@ -20,14 +21,11 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null
-    };
-  }
+class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -250,10 +248,13 @@ export const SettingsModal: React.FC = () => {
                  <div className="absolute top-0 right-0 p-2 opacity-10">
                     <SparklesIcon className="h-24 w-24 text-amber-600" />
                  </div>
-                <legend className="relative z-10 text-lg font-bold text-amber-800 dark:text-amber-400 flex items-center gap-2">
+                <legend className="relative z-10 text-lg font-bold text-amber-800 dark:text-amber-400 flex items-center gap-2 mb-2">
                   <SparklesIcon className="h-5 w-5" />
                   {t('upgradeAccount')}
                 </legend>
+                <p className="text-sm text-amber-900/80 dark:text-amber-200/80 mb-4 leading-relaxed max-w-[90%]">
+                    {t('upgradeDescription')}
+                </p>
                 
                 {upgradeSuccess ? (
                   <div className="p-6 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-xl text-center animate-fade-in">
@@ -310,33 +311,32 @@ export const SettingsModal: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3 animate-fade-in">
-                    {plans.map(plan => (
-                        <label key={plan.id} className={`relative flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPlan === plan.id ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-amber-200'}`}>
-                            <input 
-                                type="radio" 
-                                name="plan" 
-                                value={plan.id} 
-                                checked={selectedPlan === plan.id} 
-                                onChange={(e) => setSelectedPlan(e.target.value)}
-                                className="sr-only"
-                            />
-                            <div className="flex items-center gap-3">
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === plan.id ? 'border-amber-500' : 'border-gray-300'}`}>
-                                    {selectedPlan === plan.id && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
-                                </div>
-                                <span className={`font-medium ${selectedPlan === plan.id ? 'text-amber-900 dark:text-amber-100' : 'text-gray-700 dark:text-gray-300'}`}>{plan.label}</span>
+                  <div className="animate-fade-in space-y-4">
+                    {/* Restored Card Layout */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {plans.map(plan => (
+                            <div 
+                                key={plan.id} 
+                                onClick={() => setSelectedPlan(plan.id)}
+                                className={`relative cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 bg-white dark:bg-slate-800 ${selectedPlan === plan.id ? 'border-amber-500 ring-2 ring-amber-200 dark:ring-amber-900 shadow-lg transform -translate-y-1' : 'border-amber-200/50 hover:border-amber-300 dark:border-amber-800'}`}
+                            >
+                                {selectedPlan === plan.id && (
+                                    <div className="absolute -top-3 -right-3 bg-amber-500 text-white rounded-full p-1 shadow-sm">
+                                        <CheckCircleIcon className="h-5 w-5" />
+                                    </div>
+                                )}
+                                <span className={`text-sm font-bold ${selectedPlan === plan.id ? 'text-amber-800 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>{plan.label}</span>
+                                <span className={`text-xl font-extrabold ${selectedPlan === plan.id ? 'text-amber-600 dark:text-amber-300' : 'text-gray-800 dark:text-white'}`}>{plan.priceDisplay}</span>
                             </div>
-                            <span className={`font-bold ${selectedPlan === plan.id ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>{plan.priceDisplay}</span>
-                        </label>
-                    ))}
+                        ))}
+                    </div>
                     
                     <button
                         type="button"
                         onClick={() => setIsPaymentStep(true)}
-                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all transform hover:-translate-y-0.5 mt-2"
+                        className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all transform hover:-translate-y-0.5 mt-2"
                     >
-                        {t('proceedToPayment')}
+                        {t('upgradeWithPaypal')}
                     </button>
                   </div>
                 )}
