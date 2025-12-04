@@ -1,4 +1,3 @@
-
 import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';

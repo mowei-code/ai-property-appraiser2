@@ -29,6 +29,7 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType>(null!);
 
+// 僅用於初始化新用戶時判斷預設權限，不影響已存在的資料庫紀錄
 const SYSTEM_ADMIN_EMAIL = 'admin@mazylab.com';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -37,104 +38,83 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  // 標準流程：取得使用者 Profile
+  // 從資料庫同步使用者 Profile
   const fetchProfile = useCallback(async (sessionUser: any) => {
       if (!sessionUser) return;
 
-      // *** 超級管理員強制後門 ***
-      // 如果登入的是 admin，無論資料庫發生什麼錯誤 (Schema error, Network error)，
-      // 都強制給予管理員權限，確保能進入系統修復。
-      if (sessionUser.email === SYSTEM_ADMIN_EMAIL) {
-          console.log("Admin login detected - activating resilient mode.");
-          setCurrentUser({
-              id: sessionUser.id,
-              email: sessionUser.email,
-              role: '管理員',
-              name: sessionUser.user_metadata?.name || 'Admin',
-              phone: sessionUser.user_metadata?.phone || '',
-              subscriptionExpiry: null // Admin never expires
-          });
-          
-          // 雖然已經強制登入，但我們還是在背景嘗試同步資料庫，不讓錯誤阻擋 UI
-          try {
-             const { data } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).maybeSingle();
-             if (!data) {
-                 // 自動補建 Admin Profile
-                 await supabase.from('profiles').upsert([{
-                     id: sessionUser.id,
-                     email: sessionUser.email,
-                     role: '管理員',
-                     name: 'Admin',
-                     updated_at: new Date().toISOString()
-                 }]);
-             }
-          } catch (e) {
-              console.warn("Background admin profile sync failed (non-fatal):", e);
-          }
-          return;
-      }
-
-      // 一般用戶流程
       try {
-          const { data: profile, error } = await supabase
+          // 1. 嘗試從資料庫讀取現有 Profile
+          const { data: existingProfile, error: fetchError } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', sessionUser.id)
               .maybeSingle();
 
-          if (error) throw error;
+          if (fetchError) {
+              console.error("[Auth] Database fetch error:", fetchError.message);
+              // 如果是連線錯誤，不進行後續寫入，避免資料錯亂
+              return;
+          }
 
-          if (profile) {
+          if (existingProfile) {
+              // 2. 資料已存在，直接使用資料庫中的權限與資料
               setCurrentUser({
-                  id: profile.id,
-                  email: profile.email,
-                  role: profile.role as UserRole,
-                  name: profile.name,
-                  phone: profile.phone,
-                  subscriptionExpiry: profile.subscription_expiry
+                  id: existingProfile.id,
+                  email: existingProfile.email,
+                  role: existingProfile.role as UserRole,
+                  name: existingProfile.name,
+                  phone: existingProfile.phone,
+                  subscriptionExpiry: existingProfile.subscription_expiry
               });
           } else {
-              // 若無 Profile，嘗試補建
+              // 3. 資料庫無此 Profile（新註冊），執行初始化寫入
+              console.log("[Auth] Profile not found, creating new profile...");
+              
+              // 僅在「建立」時判斷是否為預設管理員
+              const isSystemAdmin = sessionUser.email === SYSTEM_ADMIN_EMAIL;
+              
               const newProfile = {
                   id: sessionUser.id,
                   email: sessionUser.email,
+                  role: isSystemAdmin ? '管理員' : '一般用戶', 
                   name: sessionUser.user_metadata?.name || '',
-                  role: '一般用戶',
                   phone: sessionUser.user_metadata?.phone || '',
                   updated_at: new Date().toISOString()
               };
-              
+
               const { error: insertError } = await supabase.from('profiles').upsert([newProfile]);
               
-              if (!insertError) {
-                  setCurrentUser({ ...newProfile, role: '一般用戶' as UserRole });
-              } else {
-                  // 降級模式：使用 Session 資訊
-                  console.warn("Profile creation failed, falling back to session:", insertError);
-                  setCurrentUser({
-                      id: sessionUser.id,
-                      email: sessionUser.email,
-                      role: '一般用戶',
-                      name: sessionUser.user_metadata?.name,
-                      phone: sessionUser.user_metadata?.phone
-                  });
+              if (insertError) {
+                  throw insertError;
               }
+
+              // 寫入成功後更新本地狀態
+              setCurrentUser({
+                  id: newProfile.id,
+                  email: newProfile.email,
+                  role: newProfile.role as UserRole,
+                  name: newProfile.name,
+                  phone: newProfile.phone,
+                  subscriptionExpiry: null
+              });
           }
       } catch (e: any) {
-          console.error("Critical Auth Error:", e.message);
-          // 發生嚴重資料庫錯誤時，允許用戶以「一般用戶」身分登入，避免卡死
+          console.error("[Auth] Critical Profile Error:", e.message);
+          // 發生嚴重錯誤時，僅提供最基礎的 Session 資訊顯示，權限降級為一般用戶以策安全
           setCurrentUser({
               id: sessionUser.id,
               email: sessionUser.email,
               role: '一般用戶',
-              name: sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0],
-              phone: sessionUser.user_metadata?.phone
+              name: sessionUser.user_metadata?.name || '',
+              phone: sessionUser.user_metadata?.phone || ''
           });
       }
   }, []);
 
   const fetchUsers = useCallback(async () => {
+    // 嚴格檢查：只有「目前登入者」在狀態中確認為「管理員」時才去撈取列表
     if (!isSupabaseConfigured || !currentUser || currentUser.role !== '管理員') return;
+    
     try {
         const { data, error } = await supabase.from('profiles').select('*');
         if (!error && data) {
@@ -177,8 +157,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return () => { subscription.unsubscribe(); };
   }, [fetchProfile]);
 
+  // 當使用者狀態改變且為管理員時，自動更新用戶列表
   useEffect(() => {
-      if (currentUser?.role === '管理員') fetchUsers();
+      if (currentUser?.role === '管理員') {
+          fetchUsers();
+      } else {
+          setUsers([]); // 非管理員清空列表
+      }
   }, [currentUser, fetchUsers]);
 
   const forceReconnect = async () => { window.location.reload(); };
@@ -225,10 +210,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (data.user) {
-            // 嘗試立即建立 Profile，如果失敗也沒關係，fetchProfile 會處理
+            // 嘗試建立 Profile，如果這裡失敗 (例如 email 未驗證導致 RLS 擋住)，
+            // 用戶之後登入時 fetchProfile 也會補建
             try {
                 await fetchProfile(data.user);
-            } catch(ignore) {}
+            } catch(e) {
+                console.warn("Initial profile creation warning:", e);
+            }
             
             setLoginModalOpen(false);
             return { success: true, messageKey: 'registrationSuccess' };
@@ -242,36 +230,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-      return { success: false, messageKey: 'registrationFailed', message: '請使用前端註冊功能' };
+      // 提醒：在 Supabase Client 端直接建立其他用戶是受限的，除非使用 Server Role Key。
+      // 這裡僅回傳提示，引導使用標準註冊流程。
+      return { success: false, messageKey: 'registrationFailed', message: '請登出後使用註冊功能建立新帳號' };
   };
 
   const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
       if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
       try {
-          // 這裡使用 maybeSingle 避免報錯
+          // 1. 獲取目標 User ID
           const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
           
           if (!targetUser) {
-              // 如果資料庫真的沒這個人 (例如 fallback 模式)，嘗試更新本地狀態讓 UI 有反應
-              if (currentUser?.email === email) {
-                  setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
-                  return { success: true, messageKey: 'updateUserSuccess', message: '僅更新本地狀態 (資料庫未連線)' };
-              }
               return { success: false, messageKey: 'userNotFound' };
           }
 
+          // 2. 準備更新資料
           const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
+          // 移除不應該寫入 DB 的欄位
           delete dbUpdates.id; 
           delete dbUpdates.email; 
           delete dbUpdates.password; 
 
+          // 3. 執行更新
           const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
           if (error) throw error;
 
-          await fetchUsers();
+          // 4. 若更新的是自己，同步更新本地狀態，UI 才會即時反應 (例如購買後變付費用戶)
           if (currentUser?.email === email) {
               setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
           }
+          
+          // 5. 重新撈取列表 (若為管理員)
+          if (currentUser?.role === '管理員') {
+              await fetchUsers();
+          }
+          
           return { success: true, messageKey: 'updateUserSuccess' };
       } catch (e: any) {
           return { success: false, messageKey: 'updateUserSuccess', message: e.message };
@@ -281,10 +275,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteUser = async (email: string): Promise<AuthResult> => {
       if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
       try {
+          // 僅刪除 profiles 表中的資料
           const { error } = await supabase.from('profiles').delete().eq('email', email);
           if (error) throw error;
+          
           await fetchUsers();
-          return { success: true, messageKey: 'deleteUserSuccess', message: '資料已清除' };
+          return { success: true, messageKey: 'deleteUserSuccess', message: '資料已清除 (Auth 帳號需至 Supabase 後台刪除)' };
       } catch (e: any) {
           return { success: false, messageKey: 'deleteUserSuccess', message: e.message };
       }
