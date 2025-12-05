@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, ReactNode, ErrorInfo, Component } from 'react';
+import React, { useState, useContext, useEffect, ReactNode, ErrorInfo } from 'react';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
@@ -20,7 +20,8 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class PayPalErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Explicitly declare state property for TypeScript compatibility
   state: ErrorBoundaryState = {
     hasError: false,
     error: null
@@ -36,9 +37,11 @@ class PayPalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySta
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback(this.state.error!);
+      // Cast 'this' to any to avoid "Property 'props' does not exist" error in some TS environments
+      return (this as any).props.fallback(this.state.error!);
     }
-    return this.props.children || null;
+    // Cast 'this' to any to avoid "Property 'props' does not exist" error in some TS environments
+    return (this as any).props.children || null;
   }
 }
 
