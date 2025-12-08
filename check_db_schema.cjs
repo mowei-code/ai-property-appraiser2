@@ -23,6 +23,15 @@ async function check() {
         console.log("Profiles Table Status: OK (Exists)");
     }
 
+    console.log("--- Checking 'system_settings' table ---");
+    const { data: settings, error: settingsError } = await supabase.from('system_settings').select('*').limit(1);
+    if (settingsError) {
+        console.log("System Settings Table Error:", settingsError.message);
+        if (settingsError.code === '42P01') console.log("HINT: Table 'system_settings' likely does not exist.");
+    } else {
+        console.log("System Settings Table Status: OK (Exists)");
+    }
+
     console.log("\n--- Checking Admin Login (SignIn) ---");
     const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: 'admin@mazylab.com',
