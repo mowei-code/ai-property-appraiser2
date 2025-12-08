@@ -219,8 +219,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         supabase.from('system_settings')
           .upsert({ id: 1, ...dbPayload })
           .then(({ error }) => {
-            if (error) console.error("Failed to save system settings to DB:", error);
-            else {
+            if (error) {
+              console.error("Failed to save system settings to DB:", error);
+              alert(`系統設定儲存失敗 (DB Error): ${error.message}`);
+            } else {
               // Update cache
               const cached = localStorage.getItem('app_system_settings_cache')
                 ? JSON.parse(localStorage.getItem('app_system_settings_cache')!)
