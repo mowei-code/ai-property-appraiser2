@@ -197,9 +197,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (error) return { success: false, messageKey: 'loginFailed', message: error.message };
 
             if (data.user) {
-                // 這裡呼叫 fetchProfile，即使內部出錯也會被 catch 捕捉並設定 fallback user，
-                // 所以不會拋出錯誤導致這裡的 login 流程中斷。
-                await fetchProfile(data.user);
+                // Optimistic UI: Don't wait for profile. onAuthStateChange will handle it.
                 setLoginModalOpen(false);
                 return { success: true, messageKey: 'loginSuccess' };
             }
@@ -210,10 +208,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const logout = async () => {
-        if (isSupabaseConfigured) await supabase.auth.signOut();
+        // Instant UI feedback
         setCurrentUser(null);
         setUsers([]);
         setAdminPanelOpen(false);
+
+        if (isSupabaseConfigured) {
+            // Run in background, don't block
+            supabase.auth.signOut().catch(console.error);
+        }
     };
 
     const register = async (details: { email: string; password: string; name: string; phone: string; }): Promise<AuthResult> => {
