@@ -1,6 +1,7 @@
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import type { User, UserRole } from '../types';
 
 interface AuthResult {
@@ -252,7 +253,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-        return { success: false, messageKey: 'registrationFailed', message: '請登出後使用註冊功能建立新帳號，或透過 Supabase 後台新增。' };
+        if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
+
+        try {
+            // 1. Create a temporary client to create the user without logging out the admin
+            const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: {
+                    persistSession: false, // Important: Don't persist this session
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                }
+            });
+
+            // 2. Create the user in Auth
+            const { data, error } = await tempClient.auth.signUp({
+                email: details.email,
+                password: details.password,
+                options: { data: { name: details.name, phone: details.phone } }
+            });
+
+            if (error) {
+                // Common error: "User already registered"
+                if (error.message.includes('already registered')) {
+                    return { success: false, messageKey: 'registrationFailed', message: '此 Email 已被註冊' };
+                }
+                return { success: false, messageKey: 'registrationFailed', message: error.message };
+            }
+
+            if (data.user) {
+                // 3. Immediately insert profile using the *Admin's* client (which has permissions)
+                // Note: The trigger on auth.users might have created a row, or we might need to upsert.
+                // Depending on the trigger setup, we might race. Safe approach: Upsert.
+                const newProfile = {
+                    id: data.user.id,
+                    email: details.email,
+                    role: details.role,
+                    name: details.name,
+                    phone: details.phone,
+                    updated_at: new Date().toISOString()
+                };
+
+                const { error: profileError } = await supabase.from('profiles').upsert([newProfile]);
+
+                if (profileError) {
+                    console.warn("Profile creation warning during admin add:", profileError);
+                }
+
+                return { success: true, messageKey: 'addUserSuccess' };
+            }
+            return { success: false, messageKey: 'registrationFailed', message: 'Unknown error during user creation' };
+
+        } catch (e: any) {
+            return { success: false, messageKey: 'registrationFailed', message: e.message };
+        }
     };
 
     const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {

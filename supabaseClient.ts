@@ -22,37 +22,37 @@ const getEnvVar = (key: string, storageKey?: string): string | undefined => {
   } catch (e) {
     // 忽略存取錯誤
   }
-  
+
   // 3. 最後檢查 LocalStorage (瀏覽器環境，允許使用者手動輸入)
   try {
-      if (storageKey && typeof window !== 'undefined' && window.localStorage) {
-          const val = window.localStorage.getItem(storageKey);
-          if (val && val.trim() !== '') return val.trim();
-      }
-  } catch (e) {}
+    if (storageKey && typeof window !== 'undefined' && window.localStorage) {
+      const val = window.localStorage.getItem(storageKey);
+      if (val && val.trim() !== '') return val.trim();
+    }
+  } catch (e) { }
 
   return undefined;
 };
 
 // 驗證 URL 格式的輔助函式
 const isValidUrl = (urlString: string | undefined): boolean => {
-    if (!urlString) return false;
-    try { 
-        new URL(urlString); 
-        return true; 
-    } catch(e) { 
-        return false; 
-    }
+  if (!urlString) return false;
+  try {
+    new URL(urlString);
+    return true;
+  } catch (e) {
+    return false;
+  }
 };
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'app_supabase_url');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'app_supabase_anon_key');
+export const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'app_supabase_url');
+export const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'app_supabase_anon_key');
 
 // 嚴格檢查：必須有值、且 URL 格式正確、且不是預設佔位符
-export const isSupabaseConfigured = !!supabaseUrl && 
-                                    !!supabaseAnonKey && 
-                                    supabaseUrl !== 'YOUR_SUPABASE_URL' &&
-                                    isValidUrl(supabaseUrl);
+export const isSupabaseConfigured = !!supabaseUrl &&
+  !!supabaseAnonKey &&
+  supabaseUrl !== 'YOUR_SUPABASE_URL' &&
+  isValidUrl(supabaseUrl);
 
 if (!isSupabaseConfigured) {
   console.warn('[SupabaseClient] Config missing or invalid. App running in disconnected mode.');
@@ -66,30 +66,30 @@ if (!isSupabaseConfigured) {
 let supabaseInstance: SupabaseClient | null = null;
 
 const getSupabaseClient = () => {
-    if (supabaseInstance) return supabaseInstance;
+  if (supabaseInstance) return supabaseInstance;
 
-    if (isSupabaseConfigured && supabaseUrl && supabaseAnonKey) {
-        try {
-            supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-                auth: {
-                    persistSession: true,
-                    autoRefreshToken: true,
-                    detectSessionInUrl: true
-                },
-                global: {
-                    headers: { 'x-application-name': 'ai-property-appraiser' },
-                }
-            });
-        } catch (error) {
-            console.error('[SupabaseClient] Crash during client creation:', error);
-            // Fallback to placeholder to prevent white screen of death
-            supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
+  if (isSupabaseConfigured && supabaseUrl && supabaseAnonKey) {
+    try {
+      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        },
+        global: {
+          headers: { 'x-application-name': 'ai-property-appraiser' },
         }
-    } else {
-        // 建立一個佔位符，防止未設定時報錯
-        supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
+      });
+    } catch (error) {
+      console.error('[SupabaseClient] Crash during client creation:', error);
+      // Fallback to placeholder to prevent white screen of death
+      supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
     }
-    return supabaseInstance;
+  } else {
+    // 建立一個佔位符，防止未設定時報錯
+    supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
+  }
+  return supabaseInstance;
 };
 
 export const supabase = getSupabaseClient();
