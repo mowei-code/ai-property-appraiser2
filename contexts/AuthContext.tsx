@@ -170,7 +170,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUsers([]);
                 setAdminPanelOpen(false);
             } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-                await fetchProfile(session.user);
+                fetchProfile(session.user).catch(err => console.error("[Auth] Background profile fetch failed:", err));
             }
         });
         return () => { subscription.unsubscribe(); };
