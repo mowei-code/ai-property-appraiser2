@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { createClient } from '@supabase/supabase-js';
 import type { User, UserRole } from '../types';
 
@@ -253,11 +253,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const addUser = async (details: { email: string; password: string; role: UserRole; name: string; phone: string }): Promise<AuthResult> => {
-        if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
+        // Use import.meta.env directly to avoid circular dependency or import issues
+        // @ts-ignore
+        const sbUrl = import.meta.env.VITE_SUPABASE_URL;
+        // @ts-ignore
+        const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        if (!isSupabaseConfigured || !sbUrl || !sbKey) return { success: false, messageKey: 'registrationFailed', message: '未設定 Supabase 連線' };
 
         try {
             // 1. Create a temporary client to create the user without logging out the admin
-            const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+            const tempClient = createClient(sbUrl, sbKey, {
                 auth: {
                     persistSession: false, // Important: Don't persist this session
                     autoRefreshToken: false,
@@ -282,8 +288,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (data.user) {
                 // 3. Immediately insert profile using the *Admin's* client (which has permissions)
-                // Note: The trigger on auth.users might have created a row, or we might need to upsert.
-                // Depending on the trigger setup, we might race. Safe approach: Upsert.
                 const newProfile = {
                     id: data.user.id,
                     email: details.email,

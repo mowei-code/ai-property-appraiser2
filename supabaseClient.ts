@@ -45,8 +45,8 @@ const isValidUrl = (urlString: string | undefined): boolean => {
   }
 };
 
-export const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'app_supabase_url');
-export const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'app_supabase_anon_key');
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'app_supabase_url');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'app_supabase_anon_key');
 
 // 嚴格檢查：必須有值、且 URL 格式正確、且不是預設佔位符
 export const isSupabaseConfigured = !!supabaseUrl &&
