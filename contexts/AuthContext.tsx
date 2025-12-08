@@ -358,6 +358,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const deleteUser = async (email: string): Promise<AuthResult> => {
         if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
 
+        // Safety Check 1: Prevent self-deletion
+        if (currentUser?.email === email) {
+            return { success: false, messageKey: 'deleteUserSuccess', message: '操作失敗：您無法刪除自己的管理員帳號。' };
+        }
+
+        // Safety Check 2: Prevent System Admin deletion
+        if (email === SYSTEM_ADMIN_EMAIL) {
+            return { success: false, messageKey: 'deleteUserSuccess', message: '操作失敗：無法刪除系統最高管理員。' };
+        }
+
         // @ts-ignore
         const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
@@ -388,7 +398,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 3. Delete from profiles (Database)
-            // Note: If Auth delete is successful and cascade delete is set up in DB, this might be redundant but safe.
             const { error } = await supabase.from('profiles').delete().eq('email', email);
             if (error) throw error;
 
