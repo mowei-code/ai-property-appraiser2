@@ -357,12 +357,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const deleteUser = async (email: string): Promise<AuthResult> => {
         if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
+
+        // @ts-ignore
+        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
         try {
+            // 1. Get User ID first
+            const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+            if (!targetUser) return { success: false, messageKey: 'userNotFound' };
+
+            // 2. If Service Role Key is available, delete from Auth (Real deletion)
+            if (serviceRoleKey) {
+                // @ts-ignore
+                const sbUrl = import.meta.env.VITE_SUPABASE_URL;
+                const adminClient = createClient(sbUrl, serviceRoleKey, {
+                    auth: {
+                        persistSession: false,
+                        autoRefreshToken: false,
+                        detectSessionInUrl: false
+                    }
+                });
+
+                const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUser.id);
+                if (authDeleteError) {
+                    console.error("Auth delete failed:", authDeleteError);
+                    return { success: false, messageKey: 'deleteUserSuccess', message: 'Auth 刪除失敗: ' + authDeleteError.message };
+                }
+            } else {
+                console.warn("No Service Role Key found. Only deleting profile. User cannot re-register with same email.");
+            }
+
+            // 3. Delete from profiles (Database)
+            // Note: If Auth delete is successful and cascade delete is set up in DB, this might be redundant but safe.
             const { error } = await supabase.from('profiles').delete().eq('email', email);
             if (error) throw error;
 
             await fetchUsers();
-            return { success: true, messageKey: 'deleteUserSuccess', message: '資料已清除 (Supabase Auth 帳號需至後台刪除)' };
+
+            if (serviceRoleKey) {
+                return { success: true, messageKey: 'deleteUserSuccess', message: '使用者已完全刪除 (包含登入帳號)' };
+            } else {
+                return { success: true, messageKey: 'deleteUserSuccess', message: '警告：僅刪除資料，未設定 Service Key 無法刪除登入帳號' };
+            }
+
         } catch (e: any) {
             return { success: false, messageKey: 'deleteUserSuccess', message: e.message };
         }
