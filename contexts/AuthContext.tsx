@@ -314,6 +314,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateUser = async (email: string, updates: Partial<User>): Promise<AuthResult> => {
         if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
+
+        // @ts-ignore
+        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+        // @ts-ignore
+        const sbUrl = import.meta.env.VITE_SUPABASE_URL;
+
         try {
             // 1. 獲取目標 User ID
             const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
@@ -322,7 +328,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return { success: false, messageKey: 'userNotFound' };
             }
 
-            // 2. 準備更新資料
+            // 2. 處理密碼更新 (Password Update Logic)
+            if (updates.password && updates.password.trim() !== '') {
+                const newPassword = updates.password.trim();
+
+                // Scenario A: Updating own password
+                if (currentUser?.email === email) {
+                    const { error: pwdError } = await supabase.auth.updateUser({ password: newPassword });
+                    if (pwdError) {
+                        return { success: false, messageKey: 'updateUserSuccess', message: '密碼更新失敗: ' + pwdError.message };
+                    }
+                }
+                // Scenario B: Admin updating another user's password
+                else if (currentUser?.role === '管理員') {
+                    if (!serviceRoleKey) {
+                        return { success: false, messageKey: 'updateUserSuccess', message: '無法更新他人密碼：缺少 Service Role Key' };
+                    }
+
+                    const adminClient = createClient(sbUrl, serviceRoleKey, {
+                        auth: {
+                            persistSession: false,
+                            autoRefreshToken: false,
+                            detectSessionInUrl: false
+                        }
+                    });
+
+                    const { error: adminPwdError } = await adminClient.auth.admin.updateUserById(targetUser.id, { password: newPassword });
+                    if (adminPwdError) {
+                        return { success: false, messageKey: 'updateUserSuccess', message: '管理員重設密碼失敗: ' + adminPwdError.message };
+                    }
+                } else {
+                    return { success: false, messageKey: 'updateUserSuccess', message: '權限不足，無法變更密碼' };
+                }
+            }
+
+            // 3. 準備資料庫更新資料
             const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
 
             // Map camelCase to snake_case for DB
@@ -333,18 +373,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             delete dbUpdates.id;
             delete dbUpdates.email;
-            delete dbUpdates.password;
+            delete dbUpdates.password; // Important: Make sure password is NOT sent to profiles table
 
-            // 3. 執行更新
-            const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
-            if (error) throw error;
+            // 4. 執行資料庫更新 (如果還有其他欄位要更新)
+            if (Object.keys(dbUpdates).length > 0) {
+                const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', targetUser.id);
+                if (error) throw error;
+            }
 
-            // 4. 若更新的是自己，同步更新本地狀態
+            // 5. 若更新的是自己，同步更新本地狀態
             if (currentUser?.email === email) {
                 setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
             }
 
-            // 5. 重新撈取列表 (若為管理員)
+            // 6. 重新撈取列表 (若為管理員)
             if (currentUser?.role === '管理員') {
                 await fetchUsers();
             }
