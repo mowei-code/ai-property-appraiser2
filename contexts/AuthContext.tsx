@@ -267,6 +267,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 2. 準備更新資料
             const dbUpdates: any = { ...updates, updated_at: new Date().toISOString() };
+
+            // Map camelCase to snake_case for DB
+            if ('subscriptionExpiry' in dbUpdates) {
+                dbUpdates.subscription_expiry = dbUpdates.subscriptionExpiry;
+                delete dbUpdates.subscriptionExpiry;
+            }
+
             delete dbUpdates.id;
             delete dbUpdates.email;
             delete dbUpdates.password;
