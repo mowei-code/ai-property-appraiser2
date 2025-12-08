@@ -26,6 +26,7 @@ interface AuthContextType {
     deleteUser: (email: string) => Promise<AuthResult>;
     refreshUsers: () => Promise<void>;
     forceReconnect: () => void;
+    resetPassword: (email: string) => Promise<AuthResult>;
 }
 
 export const AuthContext = createContext<AuthContextType>(null!);
@@ -456,13 +457,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    const resetPassword = async (email: string): Promise<AuthResult> => {
+        if (!isSupabaseConfigured) return { success: false, messageKey: 'loginFailed', message: '未設定 Supabase 連線' };
+        try {
+            // Provide a redirect URL to your app's reset password page or simply the home page
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin
+            });
+            if (error) throw error;
+            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送，請檢查您的信箱 (包含垃圾郵件)。' };
+        } catch (e: any) {
+            return { success: false, messageKey: 'resetPasswordFailed', message: e.message };
+        }
+    };
+
     return (
         <AuthContext.Provider value={{
             currentUser, users, login, logout, register,
             isLoginModalOpen, setLoginModalOpen,
             isAdminPanelOpen, setAdminPanelOpen,
             addUser, updateUser, deleteUser,
-            refreshUsers: fetchUsers, forceReconnect
+            refreshUsers: fetchUsers, forceReconnect,
+            resetPassword
         }}>
             {children}
         </AuthContext.Provider>
