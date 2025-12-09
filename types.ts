@@ -4,6 +4,7 @@ export type UserRole = '管理員' | '一般用戶' | '付費用戶';
 export type Language = 'zh-TW' | 'en' | 'zh-CN' | 'ja';
 
 export interface User {
+  id: string;
   email: string;
   password?: string; // Optional for social login
   role: UserRole;
@@ -32,22 +33,22 @@ export interface Property {
 }
 
 export interface RealtorInfo {
-    realtorName: string;
-    branchName: string;
-    address: string;
-    analysis: string;
+  realtorName: string;
+  branchName: string;
+  address: string;
+  analysis: string;
 }
 
 export interface ForeclosureInfo {
-    address: string;
-    auctionPrice: string;
-    analysis: string;
+  address: string;
+  auctionPrice: string;
+  analysis: string;
 }
 
 export interface RentalInfo {
-    address: string;
-    monthlyRent: string;
-    source: string;
+  address: string;
+  monthlyRent: string;
+  source: string;
 }
 
 export interface ValuationReport {

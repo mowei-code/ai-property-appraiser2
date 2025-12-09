@@ -15,9 +15,13 @@ declare global {
   interface Window {
     electronAPI?: {
       sendEmail: (payload: EmailPayload) => Promise<{ success: boolean; message?: string; messageId?: string }>;
-    };
+      deleteUser: (payload: { email: string }) => Promise<{ success: boolean; message?: string }>;
+      updatePassword: (payload: { email: string; password?: string }) => Promise<{ success: boolean; message?: string }>;
+      resetPassword: (payload: { email: string }) => Promise<{ success: boolean; message?: string }>;
+    }
   }
 }
+
 
 export const sendEmail = async (payload: EmailPayload): Promise<{ success: boolean; error?: string }> => {
   console.log(`[EmailService] 準備發送郵件給: ${payload.to} (副本: ${payload.cc || '無'})`);
@@ -27,7 +31,7 @@ export const sendEmail = async (payload: EmailPayload): Promise<{ success: boole
     try {
       console.log('[EmailService] 偵測到 Electron 環境，使用 IPC 通道發信...');
       const result = await window.electronAPI.sendEmail(payload);
-      
+
       if (result.success) {
         console.log('[EmailService] Electron 發信成功');
         return { success: true };
@@ -47,7 +51,7 @@ export const sendEmail = async (payload: EmailPayload): Promise<{ success: boole
   // - 線上部署(Vercel)時：會自動對應到 api/send-email.js Serverless Function
   try {
     console.log('[EmailService] 未偵測到 Electron，嘗試連接 Web API...');
-    
+
     // 使用相對路徑，讓瀏覽器自動判斷 Domain
     const response = await fetch('/api/send-email', {
       method: 'POST',
@@ -56,14 +60,14 @@ export const sendEmail = async (payload: EmailPayload): Promise<{ success: boole
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
-        // 嘗試解析 JSON 錯誤訊息
-        try {
-            const errorJson = JSON.parse(errorText);
-            throw new Error(errorJson.message || `Server responded with ${response.status}`);
-        } catch (e) {
-            throw new Error(`Server responded with ${response.status}: ${errorText}`);
-        }
+      const errorText = await response.text();
+      // 嘗試解析 JSON 錯誤訊息
+      try {
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.message || `Server responded with ${response.status}`);
+      } catch (e) {
+        throw new Error(`Server responded with ${response.status}: ${errorText}`);
+      }
     }
 
     const data = await response.json();
@@ -76,9 +80,9 @@ export const sendEmail = async (payload: EmailPayload): Promise<{ success: boole
     }
   } catch (err) {
     console.error('[EmailService] 連線失敗:', err);
-    return { 
-      success: false, 
-      error: err instanceof Error ? err.message : '無法連接後端伺服器。' 
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : '無法連接後端伺服器。'
     };
   }
 };

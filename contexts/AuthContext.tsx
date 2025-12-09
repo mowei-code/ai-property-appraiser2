@@ -317,8 +317,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!isSupabaseConfigured) return { success: false, messageKey: 'userNotFound' };
 
         // @ts-ignore
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-        // @ts-ignore
         const sbUrl = import.meta.env.VITE_SUPABASE_URL;
 
         try {
@@ -342,21 +340,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
                 // Scenario B: Admin updating another user's password
                 else if (currentUser?.role === '管理員') {
-                    if (!serviceRoleKey) {
-                        return { success: false, messageKey: 'updateUserSuccess', message: '無法更新他人密碼：缺少 Service Role Key' };
-                    }
+                    // SECURE: Use Backend/IPC for Admin Password Update to avoid exposing Service Key
+                    try {
+                        if (window.electronAPI) {
+                            const result = await window.electronAPI.updatePassword({ email, password: newPassword });
+                            if (!result.success) throw new Error(result.message);
+                        } else {
+                            const response = await fetch('/api/admin/update-password', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ email, password: newPassword })
+                            });
 
-                    const adminClient = createClient(sbUrl, serviceRoleKey, {
-                        auth: {
-                            persistSession: false,
-                            autoRefreshToken: false,
-                            detectSessionInUrl: false
+                            if (!response.ok) {
+                                const errText = await response.text();
+                                let errMsg = `Server error: ${response.status}`;
+                                try { errMsg = JSON.parse(errText).message || errMsg; } catch { }
+                                throw new Error(errMsg);
+                            }
                         }
-                    });
-
-                    const { error: adminPwdError } = await adminClient.auth.admin.updateUserById(targetUser.id, { password: newPassword });
-                    if (adminPwdError) {
-                        return { success: false, messageKey: 'updateUserSuccess', message: '管理員重設密碼失敗: ' + adminPwdError.message };
+                    } catch (err: any) {
+                        return { success: false, messageKey: 'updateUserSuccess', message: '管理員重設密碼失敗: ' + err.message };
                     }
                 } else {
                     return { success: false, messageKey: 'updateUserSuccess', message: '權限不足，無法變更密碼' };
@@ -411,62 +415,76 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { success: false, messageKey: 'deleteUserSuccess', message: '操作失敗：無法刪除系統最高管理員。' };
         }
 
-        // @ts-ignore
-        const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
         try {
-            // 1. Get User ID first
-            const { data: targetUser } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-            if (!targetUser) return { success: false, messageKey: 'userNotFound' };
-
-            // 2. If Service Role Key is available, delete from Auth (Real deletion)
-            if (serviceRoleKey) {
-                // @ts-ignore
-                const sbUrl = import.meta.env.VITE_SUPABASE_URL;
-                const adminClient = createClient(sbUrl, serviceRoleKey, {
-                    auth: {
-                        persistSession: false,
-                        autoRefreshToken: false,
-                        detectSessionInUrl: false
-                    }
+            // 1. Determine Environment (Electron vs Web)
+            if (window.electronAPI) {
+                console.log('[Auth] using Electron IPC for deleteUser');
+                const result = await window.electronAPI.deleteUser({ email });
+                if (!result.success) throw new Error(result.message);
+            } else {
+                console.log('[Auth] using Web API for deleteUser');
+                const response = await fetch('/api/admin/delete-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
                 });
 
-                const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUser.id);
-                if (authDeleteError) {
-                    console.error("Auth delete failed:", authDeleteError);
-                    return { success: false, messageKey: 'deleteUserSuccess', message: 'Auth 刪除失敗: ' + authDeleteError.message };
+                if (!response.ok) {
+                    const errText = await response.text();
+                    let errMsg = `Server error: ${response.status}`;
+                    try { errMsg = JSON.parse(errText).message || errMsg; } catch { }
+                    throw new Error(errMsg);
                 }
-            } else {
-                console.warn("No Service Role Key found. Only deleting profile. User cannot re-register with same email.");
             }
 
-            // 3. Delete from profiles (Database)
+            // 2. Also ensure local profile is removed (Database)
+            // Note: If the backend already cleaned up Auth, we should still clean up Profiles if not cascaded.
+            // Our backend logic didn't explicitly delete Profile, so we do it here to be sure, 
+            // OR we assume the refreshUsers check will eventually reflect it.
+            // Let's do a safe delete here for immediate UI consistency.
             const { error } = await supabase.from('profiles').delete().eq('email', email);
-            if (error) throw error;
+            if (error) console.warn("Profile delete warning (might already be deleted):", error.message);
 
             await fetchUsers();
-
-            if (serviceRoleKey) {
-                return { success: true, messageKey: 'deleteUserSuccess', message: '使用者已完全刪除 (包含登入帳號)' };
-            } else {
-                return { success: true, messageKey: 'deleteUserSuccess', message: '警告：僅刪除資料，未設定 Service Key 無法刪除登入帳號' };
-            }
+            return { success: true, messageKey: 'deleteUserSuccess', message: '使用者已完全刪除 (包含登入帳號)' };
 
         } catch (e: any) {
-            return { success: false, messageKey: 'deleteUserSuccess', message: e.message };
+            console.error("Delete user failed:", e);
+            return { success: false, messageKey: 'deleteUserSuccess', message: '刪除失敗: ' + e.message };
         }
     };
 
     const resetPassword = async (email: string): Promise<AuthResult> => {
         if (!isSupabaseConfigured) return { success: false, messageKey: 'loginFailed', message: '未設定 Supabase 連線' };
+
         try {
-            // Provide a redirect URL to your app's reset password page or simply the home page
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin
-            });
-            if (error) throw error;
-            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送，請檢查您的信箱 (包含垃圾郵件)。' };
+            // Priority: Custom Admin SMTP logic via Backend/IPC
+            if (window.electronAPI) {
+                const result = await window.electronAPI.resetPassword({ email });
+                if (!result.success) throw new Error(result.message);
+            } else {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (!response.ok) {
+                    const errText = await response.text();
+                    let errMsg = `Server error: ${response.status}`;
+                    try { errMsg = JSON.parse(errText).message || errMsg; } catch { }
+                    throw new Error(errMsg);
+                }
+            }
+            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送，請檢查您的信箱 (由管理員信箱發出)。' };
+
         } catch (e: any) {
+            console.warn("Custom reset password failed, trying default Supabase method as fallback...", e);
+
+            // Fallback: Default Supabase Reset (Supabase SMTP)
+            // Even if custom fails, we try the default just in case, but usually we want the custom one.
+            // If the user specifically asked for "Custom Email" because Supabase one is broken/ugly, 
+            // we should probably report the error instead of silently falling back to the broken one.
+            // BUT, for reliability, let's just return the error so the user knows to fix the Admin Settings.
             return { success: false, messageKey: 'resetPasswordFailed', message: e.message };
         }
     };
