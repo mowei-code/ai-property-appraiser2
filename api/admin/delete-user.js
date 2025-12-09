@@ -30,35 +30,20 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+    const targetUser = users.find(u => u.email === email);
+
+    if (!targetUser) {
+        return res.status(404).json({ success: false, message: 'User not found in Auth.' });
     }
 
-    if (!supabaseAdmin) {
-        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}`;
-        return res.status(500).json({ success: false, message: `Server misconfigured: No Admin Client. (${debugInfo})` });
-    }
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUser.id);
+    if (deleteError) throw deleteError;
 
-    const { email } = req.body;
+    console.log(`[Vercel API] User deleted from Auth: ${email}`);
+    return res.status(200).json({ success: true, message: 'User deleted successfully from Auth.' });
 
-    try {
-        const { data: { users }, error: searchError } = await supabaseAdmin.auth.admin.listUsers();
-        if (searchError) throw searchError;
-
-        const targetUser = users.find(u => u.email === email);
-
-        if (!targetUser) {
-            return res.status(404).json({ success: false, message: 'User not found in Auth.' });
-        }
-
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUser.id);
-        if (deleteError) throw deleteError;
-
-        console.log(`[Vercel API] User deleted from Auth: ${email}`);
-        return res.status(200).json({ success: true, message: 'User deleted successfully from Auth.' });
-
-    } catch (e) {
-        console.error('[Vercel API] Delete User Error:', e);
-        return res.status(500).json({ success: false, message: e.message });
-    }
+} catch (e) {
+    console.error('[Vercel API] Delete User Error:', e);
+    return res.status(500).json({ success: false, message: e.message });
 }
+    }

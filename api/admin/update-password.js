@@ -28,21 +28,6 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
-    }
-
-    if (!supabaseAdmin) {
-        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}`;
-        return res.status(500).json({ success: false, message: `Server misconfigured: No Admin Client. (${debugInfo})` });
-    }
-
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ success: false, message: 'Email and password required.' });
-    }
-
     try {
         // 1. Find User ID
         const { data: { users }, error: searchError } = await supabaseAdmin.auth.admin.listUsers();

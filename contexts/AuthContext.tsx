@@ -398,7 +398,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             return { success: true, messageKey: 'updateUserSuccess' };
         } catch (e: any) {
-            return { success: false, messageKey: 'updateUserSuccess', message: e.message };
+            return { success: false, messageKey: 'operationFailed', message: '更新失敗: ' + e.message };
         }
     };
 
