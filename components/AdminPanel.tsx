@@ -200,7 +200,7 @@ export const AdminPanel: React.FC = () => {
         if (!userToDelete) return;
         const result = await deleteUser(userToDelete);
         if (result.success) { setSuccess(t(result.messageKey)); if (isEditing?.email === userToDelete) resetForm(); }
-        else { setError(t(result.messageKey)); }
+        else { setError(t(result.messageKey) + (result.message ? `: ${result.message}` : '')); }
         setUserToDelete(null);
     };
 

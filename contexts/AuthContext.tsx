@@ -450,7 +450,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         } catch (e: any) {
             console.error("Delete user failed:", e);
-            return { success: false, messageKey: 'deleteUserSuccess', message: '刪除失敗: ' + e.message };
+            return { success: false, messageKey: 'operationFailed', message: '刪除失敗: ' + e.message };
         }
     };
 
