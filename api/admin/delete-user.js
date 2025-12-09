@@ -35,7 +35,8 @@ export default async function handler(req, res) {
     }
 
     if (!supabaseAdmin) {
-        return res.status(500).json({ success: false, message: 'Server misconfigured: No Admin Client.' });
+        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}`;
+        return res.status(500).json({ success: false, message: `Server misconfigured: No Admin Client. (${debugInfo})` });
     }
 
     const { email } = req.body;
