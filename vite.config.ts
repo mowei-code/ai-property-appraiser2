@@ -22,6 +22,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000, // Increase warning limit to 1000kb to reduce build noise
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      // Exclude api folder from Vite build - these are Vercel Serverless Functions
+      external: [/^\/api\//]
+    }
   },
   define: {
     // Inject the build date as a string constant.
