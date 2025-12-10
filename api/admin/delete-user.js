@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase Admin outside handler for potential cache reuse
-// Support both Vercel System Env Vars (SUPABASE_...) and User Env Vars (VITE_...)
+// Vercel uses VITE_ prefix for environment variables (set in Vercel Dashboard)
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 

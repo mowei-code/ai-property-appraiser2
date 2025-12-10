@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
+// Vercel uses VITE_ prefix for environment variables
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -34,7 +35,11 @@ export default async function handler(req, res) {
     }
 
     if (!supabaseAdmin) {
-        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}`;
+        const availableKeys = Object.keys(process.env)
+            .filter(k => k.includes('SUPABASE'))
+            .join(', ');
+        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}, Available=[${availableKeys}]`;
+        console.error('[Reset Password API] Supabase Admin not initialized:', debugInfo);
         return res.status(500).json({ success: false, message: `Server misconfigured: No Admin Client. (${debugInfo})` });
     }
 
