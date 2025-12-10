@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-// Vercel uses VITE_ prefix for environment variables
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+// IMPORTANT: Vercel Serverless Functions CANNOT read VITE_ prefixed env vars at runtime
+// They are only available during build time. We need to read from non-prefixed versions.
+// Priority: Non-prefixed (runtime) > VITE_ prefixed (build time)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseAdmin = null;
 
@@ -40,7 +42,12 @@ export default async function handler(req, res) {
             .join(', ');
         const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}, Available=[${availableKeys}]`;
         console.error('[Reset Password API] Supabase Admin not initialized:', debugInfo);
-        return res.status(500).json({ success: false, message: `Server misconfigured: No Admin Client. (${debugInfo})` });
+        console.error('[Reset Password API] CRITICAL: Vercel Serverless Functions cannot read VITE_ prefixed env vars!');
+        console.error('[Reset Password API] Please add SUPABASE_SERVICE_ROLE_KEY (without VITE_ prefix) in Vercel Dashboard');
+        return res.status(500).json({
+            success: false,
+            message: `Server misconfigured: No Admin Client. Please add SUPABASE_SERVICE_ROLE_KEY environment variable in Vercel (without VITE_ prefix). Debug: ${debugInfo}`
+        });
     }
 
     const { email } = req.body;
