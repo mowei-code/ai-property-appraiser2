@@ -49,6 +49,9 @@ export default async function handler(req, res) {
         .filter(k => k.includes('SUPABASE'))
         .sort();
 
+    // List ALL environment variable names (for debugging)
+    const allEnvKeys = Object.keys(process.env).sort();
+
     const allOk = envCheck.VITE_SUPABASE_URL.set &&
         envCheck.VITE_SUPABASE_ANON_KEY.set &&
         (envCheck.VITE_SUPABASE_SERVICE_ROLE_KEY.set || envCheck.SUPABASE_SERVICE_ROLE_KEY.set);
@@ -61,6 +64,8 @@ export default async function handler(req, res) {
             : '❌ Some required environment variables are missing',
         environmentVariables: envCheck,
         availableSupabaseKeys: allSupabaseKeys,
+        allEnvironmentKeys: allEnvKeys, // Show ALL env var names for debugging
+        totalEnvCount: allEnvKeys.length,
         recommendations: allOk ? [] : [
             !envCheck.VITE_SUPABASE_URL.set && 'Set VITE_SUPABASE_URL in Vercel Dashboard',
             !envCheck.VITE_SUPABASE_ANON_KEY.set && 'Set VITE_SUPABASE_ANON_KEY in Vercel Dashboard',

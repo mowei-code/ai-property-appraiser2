@@ -1,10 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase Admin outside handler for potential cache reuse
-// IMPORTANT: Vercel Serverless Functions CANNOT read VITE_ prefixed env vars at runtime
-// Priority: Non-prefixed (runtime) > VITE_ prefixed (build time)
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+// WORKAROUND: Vercel only exposes VITE_ prefixed env vars to Serverless Functions
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseAdmin = null;
 
