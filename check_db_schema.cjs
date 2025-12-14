@@ -35,7 +35,7 @@ async function check() {
     console.log("\n--- Checking Admin Login (SignIn) ---");
     const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: 'admin@mazylab.com',
-        password: 'admin1234'
+        password: '2rjijdgl'
     });
 
     if (loginError) {

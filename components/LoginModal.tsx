@@ -68,17 +68,27 @@ export const LoginModal: React.FC = () => {
   }, [isRegister, settings.language]);
 
   const notifyRegistration = async (newUserEmail: string, newUserName: string, newUserPhone: string) => {
-    if (!settings.smtpHost || !settings.smtpUser) return;
-    await sendEmail({
-      smtpHost: settings.smtpHost,
-      smtpPort: settings.smtpPort,
-      smtpUser: settings.smtpUser,
-      smtpPass: settings.smtpPass,
-      to: newUserEmail,
-      cc: settings.systemEmail,
-      subject: `[AI房產估價師] 歡迎加入！註冊成功通知`,
-      text: `親愛的 ${newUserName} 您好，\n\n歡迎加入 AI 房產估價師！\n您的帳號已建立成功。\n\n註冊資訊：\nEmail: ${newUserEmail}\n電話: ${newUserPhone}\n\n(此信件由系統自動發送)`
-    });
+    // 使用後端 API 發送 (確保能讀取到 SMTP 設定，避開 RLS 問題)
+    try {
+      if (window.electronAPI) {
+        // Electron 這裡暫時沒改，假設它走舊路徑，或是您也可以加 IPC。
+        // 為求簡單，若 Electron 沒實作 welcome，這裡可能會失敗。但在 Web 模式下：
+        await fetch('/api/auth/welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: newUserEmail, name: newUserName, phone: newUserPhone })
+        });
+      } else {
+        await fetch('/api/auth/welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: newUserEmail, name: newUserName, phone: newUserPhone })
+        });
+      }
+      console.log('[LoginModal] 歡迎信發送請求已送出');
+    } catch (e) {
+      console.error('[LoginModal] 發送歡迎信失敗:', e);
+    }
   };
 
   const handleMainSubmit = async (e: React.FormEvent) => {

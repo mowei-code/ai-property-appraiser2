@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config(); // fallback to .env
 import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
@@ -178,19 +180,46 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
 
     // 2. Generate Recovery Link
-    // Redirect to /reset-password page in your frontend
-    // If running locally, might accept origin from req.headers.origin
-    // Defaulting to origin of request or hardcoded site
-    const redirectTo = req.headers.origin || 'http://localhost:5173';
+    // Correctly handle Localhost vs Production logic
+    let redirectBase = req.headers.origin;
+
+    // Fallback if origin is missing (common in some proxy setups)
+    if (!redirectBase) {
+      redirectBase = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    }
+
+    // DEBUG: Force localhost if we are running locally to avoid Vercel redirect
+    if (redirectBase.includes('localhost')) {
+      // Ensure protocol is http for localhost
+      if (redirectBase.startsWith('https://')) {
+        redirectBase = redirectBase.replace('https://', 'http://');
+      }
+    }
+
+    console.log(`[Server] Headers Origin: ${req.headers.origin}`);
+    console.log(`[Server] Computed Redirect Base: ${redirectBase}`);
+
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: email,
-      options: { redirectTo: `${redirectTo}/?reset=true` } // directing to home w/ query param
+      options: { redirectTo: `${redirectBase}/?reset=true` }
     });
 
     if (linkError) throw linkError;
-    const recoveryLink = linkData.properties.action_link;
-    console.log(`[Server] Recovery Link Generated: ${recoveryLink}`);
+    let recoveryLink = linkData.properties.action_link;
+
+    // HACK: Supabase might have ignored our redirectTo param if not in whitelist.
+    // We force-rewrite it here so the user at least gets the correct link in email.
+    // If Supabase API blocks the redirect on click, the user will see a specific error then.
+    if (redirectBase && redirectBase.includes('localhost')) {
+      const urlObj = new URL(recoveryLink);
+      urlObj.searchParams.set('redirect_to', `${redirectBase}/?reset=true`);
+      recoveryLink = urlObj.toString();
+      // Also fix the double slash issue if present from Supabase config
+      recoveryLink = recoveryLink.replace('//.vercel.app', '.vercel.app');
+    }
+
+    console.log(`[Server] Recovery Link Generated (Rewritten): ${recoveryLink}`);
 
     // 3. Send Email
     const transporter = nodemailer.createTransport({
@@ -215,6 +244,52 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
   } catch (e) {
     console.error('[Server] Reset Password Error:', e);
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// --- Auth: Welcome Email (Server-Side) ---
+app.post('/api/auth/welcome', async (req, res) => {
+  const { email, name, phone } = req.body;
+
+  if (!supabaseAdmin) {
+    return res.status(500).json({ success: false, message: 'Server misconfigured' });
+  }
+
+  try {
+    console.log(`[Server] Sending welcome email to: ${email}`);
+    // 1. Fetch SMTP
+    const { data: settings } = await supabaseAdmin.from('system_settings').select('*').limit(1).maybeSingle();
+
+    if (!settings || !settings.smtp_host) {
+      console.error('[Server] Welcome Email Failed: No SMTP settings.');
+      return res.status(400).json({ success: false, message: 'Settings missing' });
+    }
+
+    const { smtp_host, smtp_port, smtp_user, smtp_pass, system_email } = settings;
+
+    // 2. Send Email
+    const transporter = nodemailer.createTransport({
+      host: smtp_host,
+      port: Number(smtp_port) || 587,
+      secure: Number(smtp_port) === 465,
+      auth: { user: smtp_user, pass: smtp_pass },
+      tls: { rejectUnauthorized: false }
+    });
+
+    await transporter.sendMail({
+      from: `"AI Property Appraiser" <${smtp_user}>`,
+      to: email,
+      cc: system_email,
+      subject: `[AI房產估價師] 歡迎加入！註冊成功通知`,
+      text: `親愛的 ${name} 您好，\n\n歡迎加入 AI 房產估價師！\n您的帳號已建立成功。\n\n註冊資訊：\nEmail: ${email}\n電話: ${phone}\n\n(此信件由系統自動發送)`
+    });
+
+    console.log(`[Server] Welcome email sent to ${email}`);
+    return res.json({ success: true });
+
+  } catch (e) {
+    console.error('[Server] Welcome Email Error:', e);
     return res.status(500).json({ success: false, message: e.message });
   }
 });
