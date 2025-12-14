@@ -18,6 +18,7 @@ import { BuildingOfficeIcon } from './components/icons/BuildingOfficeIcon';
 import { InstructionManual } from './components/InstructionManual';
 import { QuestionMarkCircleIcon } from './components/icons/QuestionMarkCircleIcon';
 import { AboutModal } from './components/AboutModal';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
 
 
 const AppContent: React.FC = () => {
@@ -40,75 +41,97 @@ const AppContent: React.FC = () => {
   const [isInstructionManualOpen, setInstructionManualOpen] = useState(false);
   const [isAboutModalOpen, setAboutModalOpen] = useState(false);
 
-  const { currentUser, isLoginModalOpen, isAdminPanelOpen, setLoginModalOpen } = useContext(AuthContext);
+  const { currentUser, isLoginModalOpen, isAdminPanelOpen, setLoginModalOpen, isPasswordRecoveryMode, setIsPasswordRecoveryMode } = useContext(AuthContext);
   const { settings, getApiKey, t, setSettingsModalOpen } = useContext(SettingsContext);
+
+  // Fallback: If Context missed the URL param, we catch it here and force the mode.
+  // Fallback: If Context missed the URL param, we catch it here and force the mode.
+  useEffect(() => {
+    // Debug Logging for URL state
+    console.log("[App Debug] Current URL:", window.location.href);
+    console.log("[App Debug] Search:", window.location.search);
+    console.log("[App Debug] Hash:", window.location.hash);
+
+    const hasResetParam = window.location.search.includes('reset=true');
+    const hasRecoveryHash = window.location.hash.includes('type=recovery');
+
+    if (!isPasswordRecoveryMode && (hasResetParam || hasRecoveryHash)) {
+      console.log("[App] Detected reset signal (Param or Hash). Forcing Recovery Mode ON.");
+      setIsPasswordRecoveryMode(true);
+    }
+  }, [isPasswordRecoveryMode, setIsPasswordRecoveryMode]);
 
   useEffect(() => {
     const resetAndInitialize = () => {
-        const currentMockProperties = getMockProperties(settings.language);
-        // Reset transient state to defaults
-        setSelectedProperty(currentMockProperties[0]);
-        setValuation(null);
-        setIsLoading(false);
-        setError(null);
-        setIsValuating(false);
-        setFilters(initialFilters);
-        setComparisonList([]);
-        setComparisonValuations({});
-        setIsHistoryOpen(false);
-        setIsMapOpen(false);
-        setIsComparing(false);
-        
-        // Load user-specific persisted state or clear it if no user is logged in
-        if (currentUser) {
-            const userFavoritesKey = `propertyFavorites_${currentUser.email}`;
-            const userRecentKey = `propertyRecentSearches_${currentUser.email}`;
-            const userHistoryKey = `valuationHistory_${currentUser.email}`;
+      const currentMockProperties = getMockProperties(settings.language);
+      // Reset transient state to defaults
+      setSelectedProperty(currentMockProperties[0]);
+      setValuation(null);
+      setIsLoading(false);
+      setError(null);
+      setIsValuating(false);
+      setFilters(initialFilters);
+      setComparisonList([]);
+      setComparisonValuations({});
+      setIsHistoryOpen(false);
+      setIsMapOpen(false);
+      setIsComparing(false);
 
-            try {
-                const storedFavorites = localStorage.getItem(userFavoritesKey);
-                setFavorites(storedFavorites ? JSON.parse(storedFavorites) : []);
+      // Load user-specific persisted state or clear it if no user is logged in
+      if (currentUser) {
+        const userFavoritesKey = `propertyFavorites_${currentUser.email}`;
+        const userRecentKey = `propertyRecentSearches_${currentUser.email}`;
+        const userHistoryKey = `valuationHistory_${currentUser.email}`;
 
-                const storedRecent = localStorage.getItem(userRecentKey);
-                setRecentSearches(storedRecent ? JSON.parse(storedRecent) : []);
-                
-                const storedHistory = localStorage.getItem(userHistoryKey);
-                setValuationHistory(storedHistory ? JSON.parse(storedHistory) : []);
-            } catch (e) {
-                console.error("Failed to parse user data from localStorage:", e);
-                setFavorites([]);
-                setRecentSearches([]);
-                setValuationHistory([]);
-            }
-        } else {
-            // Clear lists if no user is logged in
-            setFavorites([]);
-            setRecentSearches([]);
-            setValuationHistory([]);
+        try {
+          const storedFavorites = localStorage.getItem(userFavoritesKey);
+          setFavorites(storedFavorites ? JSON.parse(storedFavorites) : []);
+
+          const storedRecent = localStorage.getItem(userRecentKey);
+          setRecentSearches(storedRecent ? JSON.parse(storedRecent) : []);
+
+          const storedHistory = localStorage.getItem(userHistoryKey);
+          setValuationHistory(storedHistory ? JSON.parse(storedHistory) : []);
+        } catch (e) {
+          console.error("Failed to parse user data from localStorage:", e);
+          setFavorites([]);
+          setRecentSearches([]);
+          setValuationHistory([]);
         }
+      } else {
+        // Clear lists if no user is logged in
+        setFavorites([]);
+        setRecentSearches([]);
+        setValuationHistory([]);
+      }
 
-        // Initialize default transaction data for the default property
-        const defaultProp = currentMockProperties[0];
-        if (defaultProp) {
-            try {
-                const { city, district } = defaultProp;
-                if (city && district) {
-                    const localData = getLocalTransactions(city, district, settings.language);
-                    setTransactionList([defaultProp, ...localData]);
-                } else {
-                     setTransactionList([defaultProp]);
-                }
-            } catch (e) {
-                console.error("Initialization failed during transaction fetch:", e);
-                if (currentMockProperties[0]) {
-                   setTransactionList([currentMockProperties[0]]);
-                }
-            }
+      // Initialize default transaction data for the default property
+      const defaultProp = currentMockProperties[0];
+      if (defaultProp) {
+        try {
+          const { city, district } = defaultProp;
+          if (city && district) {
+            const localData = getLocalTransactions(city, district, settings.language);
+            setTransactionList([defaultProp, ...localData]);
+          } else {
+            setTransactionList([defaultProp]);
+          }
+        } catch (e) {
+          console.error("Initialization failed during transaction fetch:", e);
+          if (currentMockProperties[0]) {
+            setTransactionList([currentMockProperties[0]]);
+          }
         }
+      }
     };
-    
+
     resetAndInitialize();
   }, [currentUser, settings.language]);
+
+  // Handle Password Reset Flow
+  // Handle Password Reset Flow
+  // Now completely handled by AuthContext event 'PASSWORD_RECOVERY' driving 'isPasswordRecoveryMode'
+  // No local useEffect needed for this anymore.
 
   const handleFilterChange = useCallback((name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -141,7 +164,7 @@ const AppContent: React.FC = () => {
     };
 
     setSelectedProperty(propertyToUpdate);
-    
+
     if (city && district) {
       const localData = getLocalTransactions(city, district, settings.language);
       setTransactionList([propertyToUpdate, ...localData]);
@@ -150,7 +173,7 @@ const AppContent: React.FC = () => {
     }
     setIsLoading(false);
   }, [settings.language]);
-  
+
   const handleSearch = useCallback(async (
     address: string,
     reference: string,
@@ -178,154 +201,154 @@ const AppContent: React.FC = () => {
     }
 
     let propertyToValuate: Property | null = null;
-    
+
     // Attempt to parse the address string for details (City, District, Floor)
     const parsedLocation = parseTaiwanAddress(address);
-    
+
     // Prepare implicit custom inputs (floor from address)
     let effectiveCustomInputs = customInputs ? { ...customInputs } : {};
     if (!effectiveCustomInputs.floor && parsedLocation.floor) {
-        effectiveCustomInputs.floor = parsedLocation.floor;
+      effectiveCustomInputs.floor = parsedLocation.floor;
     }
-      
+
     if (details) {
-        const { coords, district, city } = details;
-        propertyToValuate = {
-          ...generateRandomPropertyDetails(),
-          id: `prop_${Date.now()}`,
-          address: address,
-          latitude: coords.lat,
-          longitude: coords.lon,
-          city: city,
-          district: district,
-          imageUrl: `https://picsum.photos/seed/${Date.now()}/800/600`,
-          price: 0,
-        };
+      const { coords, district, city } = details;
+      propertyToValuate = {
+        ...generateRandomPropertyDetails(),
+        id: `prop_${Date.now()}`,
+        address: address,
+        latitude: coords.lat,
+        longitude: coords.lon,
+        city: city,
+        district: district,
+        imageUrl: `https://picsum.photos/seed/${Date.now()}/800/600`,
+        price: 0,
+      };
     } else {
-        const currentMockProperties = getMockProperties(settings.language);
-        propertyToValuate = currentMockProperties.find(p => 
-          p.address.trim().toLowerCase() === address.trim().toLowerCase()
-        ) || null;
-          
-        const isSearchingForSelectedProperty = selectedProperty &&
-          selectedProperty.address === address &&
-          selectedProperty.latitude &&
-          selectedProperty.longitude;
+      const currentMockProperties = getMockProperties(settings.language);
+      propertyToValuate = currentMockProperties.find(p =>
+        p.address.trim().toLowerCase() === address.trim().toLowerCase()
+      ) || null;
 
-        if (!propertyToValuate && address) {
-          if (isSearchingForSelectedProperty) {
-            propertyToValuate = selectedProperty;
-          } else {
-            setLoadingMessage(t('valuating_geocoding'));
-            try {
-              const sanitizedAddress = sanitizeAddressForGeocoding(address);
-              let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(sanitizedAddress)}&countrycodes=tw&addressdetails=1&accept-language=zh-TW`);
-              if (!response.ok) throw new Error('Geocoding service failed');
-              let data = await response.json();
-              let isBroadSearch = false;
+      const isSearchingForSelectedProperty = selectedProperty &&
+        selectedProperty.address === address &&
+        selectedProperty.latitude &&
+        selectedProperty.longitude;
 
-              if (!data || data.length === 0) {
-                  isBroadSearch = true;
-                  console.warn(`Geocoding failed for full address: "${sanitizedAddress}". Retrying with a broader search.`);
-                  const streetMatch = sanitizedAddress.match(/^(.*?[路街巷段大道])/);
-                  if (streetMatch && streetMatch[1]) {
-                      const broaderAddress = streetMatch[1];
-                      response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(broaderAddress)}&countrycodes=tw&addressdetails=1&accept-language=zh-TW`);
-                      if (response.ok) {
-                          data = await response.json();
-                      }
-                  }
+      if (!propertyToValuate && address) {
+        if (isSearchingForSelectedProperty) {
+          propertyToValuate = selectedProperty;
+        } else {
+          setLoadingMessage(t('valuating_geocoding'));
+          try {
+            const sanitizedAddress = sanitizeAddressForGeocoding(address);
+            let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(sanitizedAddress)}&countrycodes=tw&addressdetails=1&accept-language=zh-TW`);
+            if (!response.ok) throw new Error('Geocoding service failed');
+            let data = await response.json();
+            let isBroadSearch = false;
+
+            if (!data || data.length === 0) {
+              isBroadSearch = true;
+              console.warn(`Geocoding failed for full address: "${sanitizedAddress}". Retrying with a broader search.`);
+              const streetMatch = sanitizedAddress.match(/^(.*?[路街巷段大道])/);
+              if (streetMatch && streetMatch[1]) {
+                const broaderAddress = streetMatch[1];
+                response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(broaderAddress)}&countrycodes=tw&addressdetails=1&accept-language=zh-TW`);
+                if (response.ok) {
+                  data = await response.json();
+                }
               }
-
-              if (data && data.length > 0) {
-                  const { lat, lon, address: addrDetails } = data[0];
-                  
-                  let displayAddress = address; 
-                  if (!isBroadSearch && addrDetails) {
-                      const hn = addrDetails.house_number ? String(addrDetails.house_number).trim() : '';
-                      const houseNumberPart = hn ? (hn.endsWith('號') ? hn : `${hn}號`) : '';
-                      const addressParts = [
-                        addrDetails.city || addrDetails.county,
-                        addrDetails.suburb || addrDetails.city_district,
-                        addrDetails.road,
-                        houseNumberPart
-                      ];
-                      const tempAddress = addressParts.filter(Boolean).join('');
-                      if (tempAddress) {
-                          // Keep original input for display if it's more detailed (e.g. includes floor)
-                          if (address.length > tempAddress.length) {
-                             displayAddress = address;
-                          } else {
-                             displayAddress = tempAddress;
-                          }
-                      }
-                  }
-
-                  // Determine District: Prioritize User Input Parsing -> Geocoding Result -> Fallback
-                  // Geocoding services can sometimes return incorrect districts for border areas or incomplete addresses.
-                  // If the user explicitly typed "Da'an District", we should respect that over a potential geocode error.
-                  const effectiveCity = parsedLocation.city || addrDetails.city || addrDetails.county;
-                  const effectiveDistrict = parsedLocation.district || addrDetails.suburb || addrDetails.city_district || '未知區域';
-
-                  propertyToValuate = {
-                      ...generateRandomPropertyDetails(),
-                      id: `prop_${Date.now()}`,
-                      address: displayAddress,
-                      latitude: parseFloat(lat),
-                      longitude: parseFloat(lon),
-                      city: effectiveCity,
-                      district: effectiveDistrict,
-                      imageUrl: `https://picsum.photos/seed/${Date.now()}/800/600`,
-                      price: 0,
-                  };
-
-                  if (isBroadSearch) {
-                      setError('無法精確定位地址，已顯示該路段的大致位置。您可以在地圖上拖動標記以修正。');
-                  }
-              } else {
-                  throw new Error('地址無法定位。請嘗試輸入更完整的地址，例如包含「縣市」與「區域」。');
-              }
-            } catch (geoError) {
-              console.error("Geocoding error:", geoError);
-              const errorMessage = geoError instanceof Error ? geoError.message : '地址定位時發生未知錯誤。';
-              setError(errorMessage);
-              const tempErrorProperty: Property = {
-                ...(getMockProperties(settings.language)[0]),
-                id: `error_${Date.now()}`,
-                address: address,
-              };
-              setSelectedProperty(tempErrorProperty);
-              setTransactionList([tempErrorProperty]);
-              setIsLoading(false);
-              setIsValuating(false);
-              setLoadingMessage('');
-              return; 
             }
+
+            if (data && data.length > 0) {
+              const { lat, lon, address: addrDetails } = data[0];
+
+              let displayAddress = address;
+              if (!isBroadSearch && addrDetails) {
+                const hn = addrDetails.house_number ? String(addrDetails.house_number).trim() : '';
+                const houseNumberPart = hn ? (hn.endsWith('號') ? hn : `${hn}號`) : '';
+                const addressParts = [
+                  addrDetails.city || addrDetails.county,
+                  addrDetails.suburb || addrDetails.city_district,
+                  addrDetails.road,
+                  houseNumberPart
+                ];
+                const tempAddress = addressParts.filter(Boolean).join('');
+                if (tempAddress) {
+                  // Keep original input for display if it's more detailed (e.g. includes floor)
+                  if (address.length > tempAddress.length) {
+                    displayAddress = address;
+                  } else {
+                    displayAddress = tempAddress;
+                  }
+                }
+              }
+
+              // Determine District: Prioritize User Input Parsing -> Geocoding Result -> Fallback
+              // Geocoding services can sometimes return incorrect districts for border areas or incomplete addresses.
+              // If the user explicitly typed "Da'an District", we should respect that over a potential geocode error.
+              const effectiveCity = parsedLocation.city || addrDetails.city || addrDetails.county;
+              const effectiveDistrict = parsedLocation.district || addrDetails.suburb || addrDetails.city_district || '未知區域';
+
+              propertyToValuate = {
+                ...generateRandomPropertyDetails(),
+                id: `prop_${Date.now()}`,
+                address: displayAddress,
+                latitude: parseFloat(lat),
+                longitude: parseFloat(lon),
+                city: effectiveCity,
+                district: effectiveDistrict,
+                imageUrl: `https://picsum.photos/seed/${Date.now()}/800/600`,
+                price: 0,
+              };
+
+              if (isBroadSearch) {
+                setError('無法精確定位地址，已顯示該路段的大致位置。您可以在地圖上拖動標記以修正。');
+              }
+            } else {
+              throw new Error('地址無法定位。請嘗試輸入更完整的地址，例如包含「縣市」與「區域」。');
+            }
+          } catch (geoError) {
+            console.error("Geocoding error:", geoError);
+            const errorMessage = geoError instanceof Error ? geoError.message : '地址定位時發生未知錯誤。';
+            setError(errorMessage);
+            const tempErrorProperty: Property = {
+              ...(getMockProperties(settings.language)[0]),
+              id: `error_${Date.now()}`,
+              address: address,
+            };
+            setSelectedProperty(tempErrorProperty);
+            setTransactionList([tempErrorProperty]);
+            setIsLoading(false);
+            setIsValuating(false);
+            setLoadingMessage('');
+            return;
           }
         }
+      }
     }
-    
+
     if (!propertyToValuate) {
-        setError('請輸入有效的地址。');
-        setTransactionList([]);
-        setIsLoading(false);
-        setIsValuating(false);
-        setLoadingMessage('');
-        return;
+      setError('請輸入有效的地址。');
+      setTransactionList([]);
+      setIsLoading(false);
+      setIsValuating(false);
+      setLoadingMessage('');
+      return;
     }
 
     setRecentSearches(prevSearches => {
-        const filtered = prevSearches.filter(p => p.address !== propertyToValuate!.address);
-        const updatedSearches = [propertyToValuate!, ...filtered];
-        const cappedSearches = updatedSearches.slice(0, 5);
-        if (currentUser) {
-            localStorage.setItem(`propertyRecentSearches_${currentUser.email}`, JSON.stringify(cappedSearches));
-        }
-        return cappedSearches;
+      const filtered = prevSearches.filter(p => p.address !== propertyToValuate!.address);
+      const updatedSearches = [propertyToValuate!, ...filtered];
+      const cappedSearches = updatedSearches.slice(0, 5);
+      if (currentUser) {
+        localStorage.setItem(`propertyRecentSearches_${currentUser.email}`, JSON.stringify(cappedSearches));
+      }
+      return cappedSearches;
     });
 
     setSelectedProperty(propertyToValuate);
-    
+
     const performValuation = async (contextTransactions: Property[]) => {
       try {
         const getLoadingMessageForReference = (refKey: string): string => {
@@ -334,15 +357,15 @@ const AppContent: React.FC = () => {
           return translated !== key ? translated : t('valuating_ai');
         };
         setLoadingMessage(getLoadingMessageForReference(reference));
-        
+
         const report = await getValuation(
-            propertyToValuate!, 
-            contextTransactions.slice(0, 10), 
-            t(reference), 
-            apiKey, 
-            settings.language, 
-            reference, 
-            Object.keys(effectiveCustomInputs).length > 0 ? effectiveCustomInputs : undefined
+          propertyToValuate!,
+          contextTransactions.slice(0, 10),
+          t(reference),
+          apiKey,
+          settings.language,
+          reference,
+          Object.keys(effectiveCustomInputs).length > 0 ? effectiveCustomInputs : undefined
         );
         setValuation(report);
         const newHistoryItem: ValuationHistoryItem = {
@@ -351,11 +374,11 @@ const AppContent: React.FC = () => {
           date: new Date().toISOString(),
         };
         setValuationHistory(prevHistory => {
-            const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 10);
-            if (currentUser) {
-                localStorage.setItem(`valuationHistory_${currentUser.email}`, JSON.stringify(updatedHistory));
-            }
-            return updatedHistory;
+          const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 10);
+          if (currentUser) {
+            localStorage.setItem(`valuationHistory_${currentUser.email}`, JSON.stringify(updatedHistory));
+          }
+          return updatedHistory;
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : '估價時發生未知錯誤，請稍後再試。';
@@ -377,7 +400,7 @@ const AppContent: React.FC = () => {
       setTransactionList(initialTransactions);
 
       await performValuation(localData);
-      
+
     } else {
       setTransactionList([propertyToValuate]);
       await performValuation([]);
@@ -392,42 +415,42 @@ const AppContent: React.FC = () => {
         return prev.filter(p => p.id !== property.id);
       } else {
         if (prev.length >= 4) {
-            alert('最多只能比較 4 個房產。');
-            return prev;
+          alert('最多只能比較 4 個房產。');
+          return prev;
         }
         if (!comparisonValuations[property.id] || comparisonValuations[property.id].error) {
-           if (!apiKey) {
-                alert('請先在設定中提供您的 Gemini API Key 以進行比較估價。');
-                return prev;
-           }
-           setComparisonValuations(prevVals => ({
-              ...prevVals,
-              [property.id]: { report: null, isLoading: true, error: null }
-            }));
-           const { city, district } = property;
-           if (city && district) {
-                const contextData = getLocalTransactions(city, district, settings.language);
-                getValuation(property, contextData.slice(0, 10), t('comprehensiveMarketFactors'), apiKey, settings.language, 'comprehensiveMarketFactors')
-                .then(report => {
-                    setComparisonValuations(prevVals => ({
-                       ...prevVals,
-                       [property.id]: { report, isLoading: false, error: null }
-                    }));
-                })
-                .catch(err => {
-                    const errorMessage = err instanceof Error ? err.message : '估價失敗';
-                    setComparisonValuations(prevVals => ({
-                       ...prevVals,
-                       [property.id]: { report: null, isLoading: false, error: errorMessage }
-                    }));
-                });
-           }
+          if (!apiKey) {
+            alert('請先在設定中提供您的 Gemini API Key 以進行比較估價。');
+            return prev;
+          }
+          setComparisonValuations(prevVals => ({
+            ...prevVals,
+            [property.id]: { report: null, isLoading: true, error: null }
+          }));
+          const { city, district } = property;
+          if (city && district) {
+            const contextData = getLocalTransactions(city, district, settings.language);
+            getValuation(property, contextData.slice(0, 10), t('comprehensiveMarketFactors'), apiKey, settings.language, 'comprehensiveMarketFactors')
+              .then(report => {
+                setComparisonValuations(prevVals => ({
+                  ...prevVals,
+                  [property.id]: { report, isLoading: false, error: null }
+                }));
+              })
+              .catch(err => {
+                const errorMessage = err instanceof Error ? err.message : '估價失敗';
+                setComparisonValuations(prevVals => ({
+                  ...prevVals,
+                  [property.id]: { report: null, isLoading: false, error: errorMessage }
+                }));
+              });
+          }
         }
         return [...prev, property];
       }
     });
   }, [comparisonValuations, getApiKey, settings.language, t]);
-  
+
   const handleClearCompare = () => setComparisonList([]);
 
   const toggleFavorite = (property: Property) => {
@@ -439,40 +462,40 @@ const AppContent: React.FC = () => {
     }
     setFavorites(updatedFavorites);
     if (currentUser) {
-        localStorage.setItem(`propertyFavorites_${currentUser.email}`, JSON.stringify(updatedFavorites));
+      localStorage.setItem(`propertyFavorites_${currentUser.email}`, JSON.stringify(updatedFavorites));
     }
   };
-  
+
   const selectPropertyFromList = (property: Property) => {
     setSelectedProperty(property);
     setValuation(null);
     setIsValuating(false);
-    
+
     const { city, district } = property;
     if (city && district) {
-        const localData = getLocalTransactions(city, district, settings.language);
-        setTransactionList([property, ...localData]);
+      const localData = getLocalTransactions(city, district, settings.language);
+      setTransactionList([property, ...localData]);
     } else {
-         setTransactionList([property]);
+      setTransactionList([property]);
     }
   };
-  
+
   const handleMapMarkerSelect = (property: Property) => {
     setSelectedProperty(property);
     setValuation(null);
     setIsValuating(false);
   };
-  
+
   const handleSelectRecent = (property: Property) => {
     handleSearch(
-      property.address, 
-      'comprehensiveMarketFactors', 
-      property.latitude && property.longitude 
-        ? { coords: { lat: property.latitude, lon: property.longitude }, city: property.city, district: property.district } 
+      property.address,
+      'comprehensiveMarketFactors',
+      property.latitude && property.longitude
+        ? { coords: { lat: property.latitude, lon: property.longitude }, city: property.city, district: property.district }
         : undefined
     );
   };
-  
+
   const handleSelectHistory = (property: Property) => {
     handleSearch(
       property.address,
@@ -484,11 +507,32 @@ const AppContent: React.FC = () => {
     setIsHistoryOpen(false);
   };
 
+  if (isPasswordRecoveryMode) {
+    if (currentUser) {
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+          <ResetPasswordModal onSuccess={() => window.location.href = '/'} />
+        </div>
+      );
+    } else {
+      // 正在驗證 Token 或是自動登入中...
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
+          <div className="text-center animate-fade-in-up">
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200">{t('verifyingLink') || '正在驗證重設連結...'}</h2>
+            <p className="text-slate-500 mt-2">請稍候，系統正在為您安全登入...</p>
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {currentUser ? (
         <main className="flex-grow p-4 sm:p-6 max-w-5xl mx-auto w-full pt-6">
-          <MainPanel 
+          <MainPanel
             onSearch={handleSearch}
             onLocationSelect={handleLocationSelect}
             isLoading={isLoading}
@@ -518,57 +562,57 @@ const AppContent: React.FC = () => {
         </main>
       ) : (
         <main className="flex-grow flex flex-col items-center justify-center p-4 text-center">
-            <div className="bg-white/80 backdrop-blur-md dark:bg-slate-800/80 p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700 max-w-lg animate-fade-in-up">
-                <div className="mx-auto bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-500/30 inline-block mb-6 transform hover:scale-110 transition-transform duration-300">
-                    <BuildingOfficeIcon className="h-10 w-10 text-white" />
-                </div>
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3 tracking-tight">{t('welcomeMessageTitle')}</h2>
-                <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
-                    {t('welcomeMessageBody')}
-                </p>
-                <div className="flex items-center justify-center gap-3 w-full">
-                    {/* Spacer for visual balance on desktop to ensure the main button is perfectly centered */}
-                    <div className="w-[54px] hidden sm:block" aria-hidden="true"></div>
-
-                    <button
-                        onClick={() => setLoginModalOpen(true)}
-                        className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all duration-200 flex-grow sm:flex-grow-0"
-                    >
-                        {t('loginOrRegister')}
-                    </button>
-                    <button
-                        onClick={() => setInstructionManualOpen(true)}
-                        className="p-3.5 bg-white/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-200 rounded-full shadow-lg hover:bg-white dark:hover:bg-slate-600 transition-all duration-200 hover:-translate-y-0.5 border border-slate-200 dark:border-slate-600"
-                        title={t('instructionManual')}
-                    >
-                        <QuestionMarkCircleIcon className="h-6 w-6" />
-                    </button>
-                </div>
-                <p style={{ fontSize: '10px' }} className="mt-6 text-slate-400 dark:text-slate-500">
-                    &copy; Mazylab studio {APP_VERSION} • {APP_RELEASE_DATE}
-                </p>
+          <div className="bg-white/80 backdrop-blur-md dark:bg-slate-800/80 p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700 max-w-lg animate-fade-in-up">
+            <div className="mx-auto bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-500/30 inline-block mb-6 transform hover:scale-110 transition-transform duration-300">
+              <BuildingOfficeIcon className="h-10 w-10 text-white" />
             </div>
+            <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3 tracking-tight">{t('welcomeMessageTitle')}</h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
+              {t('welcomeMessageBody')}
+            </p>
+            <div className="flex items-center justify-center gap-3 w-full">
+              {/* Spacer for visual balance on desktop to ensure the main button is perfectly centered */}
+              <div className="w-[54px] hidden sm:block" aria-hidden="true"></div>
+
+              <button
+                onClick={() => setLoginModalOpen(true)}
+                className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all duration-200 flex-grow sm:flex-grow-0"
+              >
+                {t('loginOrRegister')}
+              </button>
+              <button
+                onClick={() => setInstructionManualOpen(true)}
+                className="p-3.5 bg-white/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-200 rounded-full shadow-lg hover:bg-white dark:hover:bg-slate-600 transition-all duration-200 hover:-translate-y-0.5 border border-slate-200 dark:border-slate-600"
+                title={t('instructionManual')}
+              >
+                <QuestionMarkCircleIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <p style={{ fontSize: '10px' }} className="mt-6 text-slate-400 dark:text-slate-500">
+              &copy; Mazylab studio {APP_VERSION} • {APP_RELEASE_DATE}
+            </p>
+          </div>
         </main>
       )}
-      
+
       {isMapOpen && currentUser && (
-        <div 
-            className="fixed top-20 right-4 bottom-4 z-40 bg-white/90 backdrop-blur-xl dark:bg-slate-800/90 rounded-3xl shadow-2xl w-[90vw] md:w-[60vw] lg:w-[45vw] xl:w-[40%] max-w-[700px] flex flex-col overflow-hidden border border-white/20 dark:border-slate-700 animate-slide-in-right"
+        <div
+          className="fixed top-20 right-4 bottom-4 z-40 bg-white/90 backdrop-blur-xl dark:bg-slate-800/90 rounded-3xl shadow-2xl w-[90vw] md:w-[60vw] lg:w-[45vw] xl:w-[40%] max-w-[700px] flex flex-col overflow-hidden border border-white/20 dark:border-slate-700 animate-slide-in-right"
         >
-            <MapView
-                property={selectedProperty}
-                properties={transactionList}
-                filters={filters}
-                onSelectProperty={selectPropertyFromList}
-                onMapMarkerSelect={handleMapMarkerSelect}
-                onLocationSelect={handleLocationSelect}
-                onClose={() => setIsMapOpen(false)}
-            />
+          <MapView
+            property={selectedProperty}
+            properties={transactionList}
+            filters={filters}
+            onSelectProperty={selectPropertyFromList}
+            onMapMarkerSelect={handleMapMarkerSelect}
+            onLocationSelect={handleLocationSelect}
+            onClose={() => setIsMapOpen(false)}
+          />
         </div>
       )}
 
       {isComparing && currentUser && (
-        <ComparisonView 
+        <ComparisonView
           properties={comparisonList}
           valuations={comparisonValuations}
           onClose={() => setIsComparing(false)}
@@ -595,7 +639,7 @@ const AppContent: React.FC = () => {
       {isLoginModalOpen && <LoginModal />}
       {isAdminPanelOpen && currentUser?.role === '管理員' && <AdminPanel />}
       {currentUser && <SettingsModal />}
-       <style>{`
+      <style>{`
         @keyframes slide-in-right {
           from { 
             transform: translateX(100%); 

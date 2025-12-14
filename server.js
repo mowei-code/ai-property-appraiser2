@@ -239,6 +239,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
       text: mailText
     });
 
+    // console.log('[Server] DEBUG MODE: Email sending skipped to prevent scanner interference.');
+    // console.log('[Server] Recovery email sent (SIMULATED).');
+
     console.log('[Server] Recovery email sent.');
     return res.json({ success: true, message: 'Password reset email sent.' });
 

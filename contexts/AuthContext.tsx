@@ -20,6 +20,8 @@ interface AuthContextType {
     isLoginModalOpen: boolean;
     setLoginModalOpen: (isOpen: boolean) => void;
     isAdminPanelOpen: boolean;
+    isPasswordRecoveryMode: boolean; // New Flag
+    setIsPasswordRecoveryMode: (isRecovery: boolean) => void; // Allow manual clear
     setAdminPanelOpen: (isOpen: boolean) => void;
     addUser: (details: { email: string; password: string; role: UserRole; name: string; phone: string }) => Promise<AuthResult>;
     updateUser: (email: string, updates: Partial<User>) => Promise<AuthResult>;
@@ -41,6 +43,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [users, setUsers] = useState<User[]>([]);
     const [isLoginModalOpen, setLoginModalOpen] = useState(false);
     const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
+    // Double Check: Initialize state by checking URL immediately.
+    // Supabase often puts 'type=recovery' in the hash, or we added 'reset=true' in the query.
+    const [isPasswordRecoveryMode, setIsPasswordRecoveryMode] = useState(() => {
+        const hash = window.location.hash;
+        const search = window.location.search;
+        const isRecovery = hash.includes('type=recovery') || search.includes('reset=true');
+        if (isRecovery) {
+            console.log("[Auth] Recovery Mode Detected via URL:", { hash, search });
+        }
+        return isRecovery;
+    });
 
     // 從資料庫同步使用者 Profile
     const fetchProfile = useCallback(async (sessionUser: any) => {
@@ -173,6 +186,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setAdminPanelOpen(false);
             } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
                 fetchProfile(session.user).catch(err => console.error("[Auth] Background profile fetch failed:", err));
+            } else if (event === 'PASSWORD_RECOVERY') {
+                console.log("[Auth] Password Recovery Event Detected!");
+                setIsPasswordRecoveryMode(true);
+                // Also fetch profile so currentUser is set (needed for updateUser)
+                if (session?.user) fetchProfile(session.user);
             }
         });
         return () => { subscription.unsubscribe(); };
@@ -493,6 +511,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         <AuthContext.Provider value={{
             currentUser, users, login, logout, register,
             isLoginModalOpen, setLoginModalOpen,
+            isPasswordRecoveryMode, setIsPasswordRecoveryMode,
             isAdminPanelOpen, setAdminPanelOpen,
             addUser, updateUser, deleteUser,
             refreshUsers: fetchUsers, forceReconnect,
