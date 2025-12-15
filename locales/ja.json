@@ -1,4 +1,3 @@
-
 {
   "appTitle": "AI不動産鑑定士",
   "loginOrRegister": "ログイン / 登録",
@@ -316,8 +315,6 @@
   "upgradeDescription": "実取引価格分析、不動産業者の視点、シナリオ分析など、すべての高度な鑑定機能を解放します。下のボタンをクリックして、PayPalで安全にアップグレードしてください。",
   "upgradeWithPaypal": "PayPalでアップグレード",
   "upgradeSuccess": "アップグレード成功！あなたは今、有料会員です。",
-  "clickToLogin": "ここをクリックしてログイン",
-  "registrationSuccessPrompt": "アカウントが正常に作成されました。新しいアカウントでログインしてください。",
   "planMonthly": "購読会員 (月額)",
   "planBiannual": "購読会員 (6ヶ月)",
   "planYearly": "購読会員 (年額)",
@@ -346,5 +343,8 @@
   "paymentFailed": "支払いに失敗しました。後でもう一度お試しください。",
   "paymentError": "PayPalへの接続エラー。",
   "paypalNotConfigured": "PayPalアカウントが設定されていません。管理者に連絡してください。",
-  "back": "戻る"
+  "invalidLoginCredentials": "ログイン情報が無効です。",
+  "preferences": "環境設定",
+  "apiKeyDescription": "プライバシーと安定性のために、独自のAPIキーを使用することをお勧めします。キーはローカルに保存されます。",
+  "save": "保存"
 }

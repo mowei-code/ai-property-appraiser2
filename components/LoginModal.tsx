@@ -130,7 +130,9 @@ export const LoginModal: React.FC = () => {
       } else {
         const loginResult = await login(email, password);
         if (!loginResult.success) {
-          setError(loginResult.message || t('loginFailed'));
+          let msg = loginResult.message || t('loginFailed');
+          if (msg === 'Invalid login credentials') msg = t('invalidLoginCredentials');
+          setError(msg);
         }
       }
     } catch (e) {

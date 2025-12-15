@@ -686,6 +686,53 @@ const AppContent: React.FC = () => {
         .animate-fade-in {
           animation: fade-in 0.3s ease-out forwards;
         }
+        @keyframes pulse-ring {
+          0% { transform: scale(0.33); opacity: 1; }
+          80%, 100% { transform: scale(1); opacity: 0; }
+        }
+        @keyframes pulse-dot {
+          0% { transform: scale(0.8); }
+          50% { transform: scale(1); }
+          100% { transform: scale(0.8); }
+        }
+        .blinking-cursor-icon {
+          background: transparent;
+          border: none;
+        }
+        .blinking-cursor-dot {
+          position: relative;
+          width: 20px;
+          height: 20px;
+        }
+        .blinking-cursor-dot::before {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 12px;
+          height: 12px;
+          margin-left: -6px;
+          margin-top: -6px;
+          background-color: #3b82f6;
+          border-radius: 50%;
+          animation: pulse-dot 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+          z-index: 2;
+        }
+        .blinking-cursor-dot::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 40px;
+          height: 40px;
+          margin-left: -20px;
+          margin-top: -20px;
+          border-radius: 50%;
+          border: 2px solid #3b82f6;
+          animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+          z-index: 1;
+        }
       `}</style>
     </div>
   );

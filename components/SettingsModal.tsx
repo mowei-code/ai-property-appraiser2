@@ -408,7 +408,7 @@ export const SettingsModal: React.FC = () => {
                                         name="apiKey"
                                         value={localSettings.apiKey}
                                         onChange={handleChange}
-                                        placeholder={t('enterApiKey')}
+                                        placeholder={t('enterYourGeminiApiKey')}
                                         className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                     />
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -426,9 +426,9 @@ export const SettingsModal: React.FC = () => {
                                     onChange={handleChange}
                                     className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                 >
-                                    <option value="system">{t('themeSystem')}</option>
-                                    <option value="light">{t('themeLight')}</option>
-                                    <option value="dark">{t('themeDark')}</option>
+                                    <option value="system">{t('theme_system')}</option>
+                                    <option value="light">{t('theme_light')}</option>
+                                    <option value="dark">{t('theme_dark')}</option>
                                 </select>
                             </div>
 
@@ -481,7 +481,7 @@ export const SettingsModal: React.FC = () => {
                                         <CheckCircleIcon className="h-5 w-5" />
                                         {t('saved')}
                                     </>
-                                ) : t('save')}
+                                ) : t('saveSettings')}
                             </button>
                         </div>
                     </form>
