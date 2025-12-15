@@ -4,8 +4,8 @@ import nodemailer from 'nodemailer';
 // WORKAROUND: Vercel only exposes VITE_ prefixed env vars to Serverless Functions
 // This is contrary to documentation but confirmed through testing
 // Using VITE_ prefix for all environment variables
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseAdmin = null;
 

@@ -55,6 +55,19 @@ const AppContent: React.FC = () => {
     const hasResetParam = window.location.search.includes('reset=true');
     const hasRecoveryHash = window.location.hash.includes('type=recovery');
 
+    // Check for errors in hash (e.g. #error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const error = hashParams.get('error');
+    const errorCode = hashParams.get('error_code');
+
+    if (error && (errorCode === 'otp_expired' || error === 'access_denied')) {
+      console.warn("[App] Recovery Link Expired or Invalid:", error, errorCode);
+      alert('⚠️此連結已失效或已被使用。\n\n為了您的帳號安全，重設連結僅限使用一次。\n若需重設密碼，請回到登入頁面重新申請。');
+      // Clear URL to prevent loop
+      window.history.replaceState(null, '', window.location.pathname);
+      return;
+    }
+
     if (!isPasswordRecoveryMode && (hasResetParam || hasRecoveryHash)) {
       console.log("[App] Detected reset signal (Param or Hash). Forcing Recovery Mode ON.");
       setIsPasswordRecoveryMode(true);

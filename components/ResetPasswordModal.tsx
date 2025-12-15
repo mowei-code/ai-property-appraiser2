@@ -100,6 +100,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-200 border border-blue-100 dark:border-blue-800">
                                 <p>為了您的帳號安全，請設定一組新的密碼。</p>
+                                <p className="mt-2 text-xs opacity-80 font-bold">⚠️ 注意：為了確保安全，此重設連結僅限使用一次，請務必在開啟後立即完成設定。</p>
                             </div>
 
                             <div className="relative">
