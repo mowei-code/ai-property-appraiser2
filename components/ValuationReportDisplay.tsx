@@ -706,7 +706,7 @@ export const ValuationReportDisplay: React.FC<ValuationReportDisplayProps> = ({
             {renderHeader()}
 
             {/* Mobile Tab Navigation */}
-            <div className="md:hidden sticky top-[72px] z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm -mx-4 px-4 py-2 border-b border-slate-200 dark:border-slate-800 mb-6 flex overflow-x-auto gap-4 no-scrollbar">
+            <div className="md:hidden sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm -mx-4 px-4 py-2 border-b border-slate-200 dark:border-slate-800 mb-6 flex overflow-x-auto gap-4 no-scrollbar">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}

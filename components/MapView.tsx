@@ -202,8 +202,8 @@ export const MapView: React.FC<MapViewProps> = ({ property, properties, filters,
         onAdd: function (mapInstance: any) {
           const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
           container.style.backgroundColor = 'white';
-          container.style.width = '34px';
-          container.style.height = '34px';
+          container.style.width = '44px';
+          container.style.height = '44px';
           container.style.display = 'flex';
           container.style.alignItems = 'center';
           container.style.justifyContent = 'center';
@@ -229,8 +229,8 @@ export const MapView: React.FC<MapViewProps> = ({ property, properties, filters,
         onAdd: function (mapInstance: any) {
           const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
           container.style.backgroundColor = 'white';
-          container.style.width = '34px';
-          container.style.height = '34px';
+          container.style.width = '44px';
+          container.style.height = '44px';
           container.style.display = 'flex';
           container.style.alignItems = 'center';
           container.style.justifyContent = 'center';

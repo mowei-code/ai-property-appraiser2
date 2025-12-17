@@ -1,11 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-// WORKAROUND: Vercel only exposes VITE_ prefixed env vars to Serverless Functions
-// This is contrary to documentation but confirmed through testing
-// Using VITE_ prefix for all environment variables
+// Standard logic: Use VITE_SUPABASE_URL (public) and SUPABASE_SERVICE_ROLE_KEY (private/backend-only)
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseAdmin = null;
 
@@ -36,23 +34,17 @@ export default async function handler(req, res) {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
     }
 
+    // Critical check: If key is missing, fail fast.
     if (!supabaseAdmin) {
-        const availableKeys = Object.keys(process.env)
-            .filter(k => k.includes('SUPABASE'))
-            .join(', ');
-        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}, Available=[${availableKeys}]`;
-        console.error('[Reset Password API] Supabase Admin not initialized:', debugInfo);
-        console.error('[Reset Password API] CRITICAL: Vercel Serverless Functions cannot read VITE_ prefixed env vars!');
-        console.error('[Reset Password API] Please add SUPABASE_SERVICE_ROLE_KEY (without VITE_ prefix) in Vercel Dashboard');
+        console.error('[Reset Password API] Supabase Admin not initialized.');
+        // Don't expose env vars in production errors for security, just state what is missing.
         return res.status(500).json({
             success: false,
-            message: `Server misconfigured: No Admin Client. Please add SUPABASE_SERVICE_ROLE_KEY environment variable in Vercel (without VITE_ prefix). Debug: ${debugInfo}`
+            message: 'Server Error: Admin Client not initialized. Missing SUPABASE_SERVICE_ROLE_KEY.'
         });
     }
 
     const { email } = req.body;
-    // For Vercel, we can assume https unless set otherwise, or rely on referer
-    // req.headers.origin is usually available
     const origin = req.headers.origin || 'https://ai-property-appraiser.vercel.app';
 
     try {
@@ -63,12 +55,12 @@ export default async function handler(req, res) {
             .maybeSingle();
 
         if (settingsError || !settings) {
-            return res.status(500).json({ success: false, message: 'Failed to fetch SMTP settings.' });
+            return res.status(500).json({ success: false, message: 'Failed to fetch SMTP settings from database.' });
         }
 
         const { smtp_host, smtp_port, smtp_user, smtp_pass } = settings;
         if (!smtp_host || !smtp_user || !smtp_pass) {
-            return res.status(400).json({ success: false, message: 'SMTP settings incomplete in DB.' });
+            return res.status(400).json({ success: false, message: 'SMTP settings are incomplete.' });
         }
 
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -97,11 +89,10 @@ export default async function handler(req, res) {
             text: mailText
         });
 
-        console.log('[Vercel API] Recovery email sent.');
-        return res.status(200).json({ success: true, message: 'Password reset email sent.' });
+        return res.status(200).json({ success: true, message: 'Password reset email sent successfully.' });
 
     } catch (e) {
-        console.error('[Vercel API] Reset Password Error:', e);
-        return res.status(500).json({ success: false, message: e.message });
+        console.error('[Reset Password API] Error:', e);
+        return res.status(500).json({ success: false, message: e.message || 'Internal Server Error' });
     }
 }

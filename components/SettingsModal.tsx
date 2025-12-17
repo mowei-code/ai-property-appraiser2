@@ -434,27 +434,27 @@ export const SettingsModal: React.FC = () => {
 
                             {/* Password Change Section */}
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">變更密碼</h4>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{t('changePassword')}</h4>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">新密碼 (New Password)</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('newPassword')}</label>
                                         <input
                                             type="password"
                                             name="newPassword"
                                             value={(localSettings as any).newPassword || ''}
                                             onChange={handleChange}
-                                            placeholder="若不變更請留白"
+                                            placeholder={t('newPasswordPlaceholder')}
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">確認新密碼 (Confirm Password)</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('confirmNewPassword')}</label>
                                         <input
                                             type="password"
                                             name="confirmPassword"
                                             value={(localSettings as any).confirmPassword || ''}
                                             onChange={handleChange}
-                                            placeholder="再次輸入新密碼"
+                                            placeholder={t('confirmPasswordPlaceholder')}
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>

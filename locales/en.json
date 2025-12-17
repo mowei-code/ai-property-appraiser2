@@ -364,5 +364,15 @@
   "invalidLoginCredentials": "Invalid login credentials.",
   "preferences": "Preferences",
   "apiKeyDescription": "We recommend using your own API Key for privacy and stability. Your key is stored locally.",
-  "save": "Save"
+  "save": "Save",
+  "changePassword": "Change Password",
+  "newPassword": "New Password",
+  "newPasswordPlaceholder": "Leave blank to keep unchanged",
+  "confirmNewPassword": "Confirm New Password",
+  "confirmPasswordPlaceholder": "Re-enter new password",
+  "resetPasswordTitle": "Reset Password",
+  "resetPasswordDescription": "Please enter your registered email address. The system will send you a reset link.",
+  "sendResetEmail": "Send Reset Email",
+  "backToLogin": "Back to Login",
+  "forgotPassword": "Forgot Password?"
 }

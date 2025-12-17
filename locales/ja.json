@@ -346,5 +346,15 @@
   "invalidLoginCredentials": "ログイン情報が無効です。",
   "preferences": "環境設定",
   "apiKeyDescription": "プライバシーと安定性のために、独自のAPIキーを使用することをお勧めします。キーはローカルに保存されます。",
-  "save": "保存"
+  "save": "保存",
+  "changePassword": "パスワード変更",
+  "newPassword": "新しいパスワード",
+  "newPasswordPlaceholder": "変更しない場合は空欄",
+  "confirmNewPassword": "新しいパスワードの確認",
+  "confirmPasswordPlaceholder": "新しいパスワードを再入力",
+  "resetPasswordTitle": "パスワードリセット",
+  "resetPasswordDescription": "登録したメールアドレスを入力してください。システムからリセットメールが送信されます。",
+  "sendResetEmail": "リセットメールを送信",
+  "backToLogin": "ログインに戻る",
+  "forgotPassword": "パスワードをお忘れですか?"
 }

@@ -364,5 +364,15 @@
   "invalidLoginCredentials": "帐号或密码错误",
   "preferences": "偏好设定",
   "apiKeyDescription": "我们建议您使用自己的 API Key 以确保隐私及稳定性。您的 Key 只会储存在本地端浏览器。",
-  "save": "保存"
+  "save": "保存",
+  "changePassword": "变更密码",
+  "newPassword": "新密码",
+  "newPasswordPlaceholder": "若不变更请留白",
+  "confirmNewPassword": "确认新密码",
+  "confirmPasswordPlaceholder": "再次输入新密码",
+  "resetPasswordTitle": "重设密码",
+  "resetPasswordDescription": "请输入您的注册 Email,系统将发送重设信件给您。",
+  "sendResetEmail": "发送重设信",
+  "backToLogin": "返回登录",
+  "forgotPassword": "忘记密码?"
 }

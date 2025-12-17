@@ -376,5 +376,15 @@
   "invalidLoginCredentials": "帳號或密碼錯誤",
   "preferences": "偏好設定",
   "apiKeyDescription": "我們建議您使用自己的 API Key 以確保隱私及穩定性。您的 Key 只會儲存在本地端瀏覽器。",
-  "save": "儲存"
+  "save": "儲存",
+  "changePassword": "變更密碼",
+  "newPassword": "新密碼",
+  "newPasswordPlaceholder": "若不變更請留白",
+  "confirmNewPassword": "確認新密碼",
+  "confirmPasswordPlaceholder": "再次輸入新密碼",
+  "resetPasswordTitle": "重設密碼",
+  "resetPasswordDescription": "請輸入您的註冊 Email,系統將發送重設信件給您。",
+  "sendResetEmail": "發送重設信",
+  "backToLogin": "返回登入",
+  "forgotPassword": "忘記密碼?"
 }
