@@ -304,53 +304,54 @@ export const MapView: React.FC<MapViewProps> = ({ property, properties, filters,
       (newMainMarker as any)._clickCleanup = () => {
         map.off('click', onMapClick);
       };
+    }
 
-      const filteredProperties = applyFilters(properties, filters);
-      filteredProperties.forEach(otherProperty => {
-        if (otherProperty.id !== property?.id && otherProperty.latitude && otherProperty.longitude) {
-          const marker = L.marker([otherProperty.latitude, otherProperty.longitude], { icon: nearbyIcon });
-          const nearbyMarkerSpecialTagHtml = isSpecialTransaction(otherProperty) ? `<span style="background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 9999px; font-size: 10px; font-weight: bold;" title="${escapeHtml(otherProperty.remarks || '')}">${t('specialTransaction')}</span><br>` : '';
-          const nearbyStreetViewLinkHtml = `<a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${otherProperty.latitude},${otherProperty.longitude}" target="_blank" rel="noopener noreferrer" style="margin-top: 8px; padding: 4px 8px; font-size: 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-decoration: none;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>${t('openStreetView')}</a>`;
-          const popupContent = `<div><b>${otherProperty.address}</b><br>${nearbyMarkerSpecialTagHtml}<p style="font-size: 11px; color: #64748b; margin-top: 4px; margin-bottom: 0;">${t('mapView_clickToLoad')}</p></div>${nearbyStreetViewLinkHtml}`;
-          marker.bindPopup(popupContent);
-          marker.bindTooltip(otherProperty.address, { permanent: false, sticky: true, direction: 'top', offset: L.point(0, -41) });
-          marker.on('click', () => onSelectProperty(otherProperty));
-          nearbyMarkersRef.current.addLayer(marker);
-        }
-      });
-
-      const generateFilterSummary = (currentFilters: Filters): string[] => {
-        const summary: string[] = [];
-        if (currentFilters.type !== 'all' && currentFilters.type) summary.push(t(currentFilters.type as any));
-        const priceLabel = PRICE_RANGES.find(r => r.value === currentFilters.price)?.label;
-        if (priceLabel && currentFilters.price !== 'all') summary.push(t(`priceRange_${currentFilters.price}`));
-        const bedLabel = BEDROOM_OPTIONS.find(o => o.value === currentFilters.bedrooms)?.label;
-        if (bedLabel && currentFilters.bedrooms !== 'all') summary.push(t(`bedroomOption_${currentFilters.bedrooms}`));
-        const yearLabel = YEAR_BUILT_RANGES.find(r => r.value === currentFilters.yearBuilt)?.label;
-        if (yearLabel && currentFilters.yearBuilt !== 'all') summary.push(t(`yearBuiltRange_${currentFilters.yearBuilt}`));
-        const ppsqmLabel = PRICE_PER_SQM_RANGES.find(r => r.value === currentFilters.pricePerSqm)?.label;
-        if (ppsqmLabel && currentFilters.pricePerSqm !== 'all') summary.push(t(`pricePerSqmRange_${currentFilters.pricePerSqm}`));
-        const sizeLabel = SIZE_RANGES.find(r => r.value === currentFilters.size)?.label;
-        if (sizeLabel && currentFilters.size !== 'all') summary.push(t(`sizeRange_${currentFilters.size}`));
-        return summary;
-      };
-
-      const activeFilters = generateFilterSummary(filters);
-      if (activeFilters.length > 0) {
-        const FilterControl = L.Control.extend({
-          onAdd: function () {
-            const div = L.DomUtil.create('div', 'leaflet-control-layers leaflet-control-layers-expanded p-2 bg-white/80 backdrop-blur-sm rounded-md shadow');
-            L.DomEvent.disableClickPropagation(div);
-            const tagsHtml = activeFilters.map(f => `<span class="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">${escapeHtml(f)}</span>`).join(' ');
-            div.innerHTML = `<h3 class="text-xs font-bold mb-1 text-gray-600">${t('mapView_currentFilters')}</h3><div class="flex flex-wrap gap-1">${tagsHtml}</div>`;
-            return div;
-          },
-          onRemove: function () { }
-        });
-        filterControlRef.current = new FilterControl({ position: 'topright' });
-        map.addControl(filterControlRef.current);
+    const filteredProperties = applyFilters(properties, filters);
+    filteredProperties.forEach(otherProperty => {
+      if (otherProperty.id !== property?.id && otherProperty.latitude && otherProperty.longitude) {
+        const marker = L.marker([otherProperty.latitude, otherProperty.longitude], { icon: nearbyIcon });
+        const nearbyMarkerSpecialTagHtml = isSpecialTransaction(otherProperty) ? `<span style="background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 9999px; font-size: 10px; font-weight: bold;" title="${escapeHtml(otherProperty.remarks || '')}">${t('specialTransaction')}</span><br>` : '';
+        const nearbyStreetViewLinkHtml = `<a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${otherProperty.latitude},${otherProperty.longitude}" target="_blank" rel="noopener noreferrer" style="margin-top: 8px; padding: 4px 8px; font-size: 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-decoration: none;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>${t('openStreetView')}</a>`;
+        const popupContent = `<div><b>${otherProperty.address}</b><br>${nearbyMarkerSpecialTagHtml}<p style="font-size: 11px; color: #64748b; margin-top: 4px; margin-bottom: 0;">${t('mapView_clickToLoad')}</p></div>${nearbyStreetViewLinkHtml}`;
+        marker.bindPopup(popupContent);
+        marker.bindTooltip(otherProperty.address, { permanent: false, sticky: true, direction: 'top', offset: L.point(0, -41) });
+        marker.on('click', () => onSelectProperty(otherProperty));
+        nearbyMarkersRef.current.addLayer(marker);
       }
-    }, [property, properties, filters, onMapMarkerSelect, t]);
+    });
+
+    const generateFilterSummary = (currentFilters: Filters): string[] => {
+      const summary: string[] = [];
+      if (currentFilters.type !== 'all' && currentFilters.type) summary.push(t(currentFilters.type as any));
+      const priceLabel = PRICE_RANGES.find(r => r.value === currentFilters.price)?.label;
+      if (priceLabel && currentFilters.price !== 'all') summary.push(t(`priceRange_${currentFilters.price}`));
+      const bedLabel = BEDROOM_OPTIONS.find(o => o.value === currentFilters.bedrooms)?.label;
+      if (bedLabel && currentFilters.bedrooms !== 'all') summary.push(t(`bedroomOption_${currentFilters.bedrooms}`));
+      const yearLabel = YEAR_BUILT_RANGES.find(r => r.value === currentFilters.yearBuilt)?.label;
+      if (yearLabel && currentFilters.yearBuilt !== 'all') summary.push(t(`yearBuiltRange_${currentFilters.yearBuilt}`));
+      const ppsqmLabel = PRICE_PER_SQM_RANGES.find(r => r.value === currentFilters.pricePerSqm)?.label;
+      if (ppsqmLabel && currentFilters.pricePerSqm !== 'all') summary.push(t(`pricePerSqmRange_${currentFilters.pricePerSqm}`));
+      const sizeLabel = SIZE_RANGES.find(r => r.value === currentFilters.size)?.label;
+      if (sizeLabel && currentFilters.size !== 'all') summary.push(t(`sizeRange_${currentFilters.size}`));
+      return summary;
+    };
+
+    const activeFilters = generateFilterSummary(filters);
+    if (activeFilters.length > 0) {
+      const FilterControl = L.Control.extend({
+        onAdd: function () {
+          const div = L.DomUtil.create('div', 'leaflet-control-layers leaflet-control-layers-expanded p-2 bg-white/80 backdrop-blur-sm rounded-md shadow');
+          L.DomEvent.disableClickPropagation(div);
+          const tagsHtml = activeFilters.map(f => `<span class="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">${escapeHtml(f)}</span>`).join(' ');
+          div.innerHTML = `<h3 class="text-xs font-bold mb-1 text-gray-600">${t('mapView_currentFilters')}</h3><div class="flex flex-wrap gap-1">${tagsHtml}</div>`;
+          return div;
+        },
+        onRemove: function () { }
+      });
+      filterControlRef.current = new FilterControl({ position: 'topright' });
+      map.addControl(filterControlRef.current);
+    }
+  }, [property, properties, filters, onMapMarkerSelect, t]);
 
   return (
     <>
