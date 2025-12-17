@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
       {/* Logo Area */}
       <div className="flex items-center gap-3 group cursor-pointer select-none">
         <div className="transition-transform duration-300 ease-in-out group-hover:rotate-[-12deg] group-hover:scale-110">
-          <img src="/logo_v4.jpg" alt="App Logo" className="h-10 w-auto object-contain drop-shadow-lg" />
+          <img src="/logo_final.png" alt="App Logo" className="h-10 w-auto object-contain drop-shadow-lg" />
         </div>
         <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 dark:from-white dark:to-slate-300 tracking-tight">
           {t('appTitle')}
