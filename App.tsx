@@ -577,7 +577,7 @@ const AppContent: React.FC = () => {
         <main className="flex-grow flex flex-col items-center justify-center p-4 text-center">
           <div className="bg-white/80 backdrop-blur-md dark:bg-slate-800/80 p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700 max-w-lg animate-fade-in-up">
             <div className="mx-auto inline-block mb-6 transform hover:scale-110 transition-transform duration-300">
-              <img src="/logo_final_v11.png" alt="App Logo" className="h-20 w-auto object-contain drop-shadow-xl" />
+              <img src="/logo.png?t=manual_user_fix" alt="App Logo" className="h-20 w-auto object-contain drop-shadow-xl" />
             </div>
             <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3 tracking-tight">{t('welcomeMessageTitle')}</h2>
             <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
