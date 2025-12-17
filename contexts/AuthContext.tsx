@@ -476,34 +476,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!isSupabaseConfigured) return { success: false, messageKey: 'loginFailed', message: '未設定 Supabase 連線' };
 
         try {
-            // Priority: Custom Admin SMTP logic via Backend/IPC
+            // Priority: Custom Admin SMTP logic via Backend/IPC (Electron only)
             if (window.electronAPI) {
                 const result = await window.electronAPI.resetPassword({ email });
                 if (!result.success) throw new Error(result.message);
-            } else {
-                const response = await fetch('/api/auth/reset-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                if (!response.ok) {
-                    const errText = await response.text();
-                    let errMsg = `Server error: ${response.status}`;
-                    try { errMsg = JSON.parse(errText).message || errMsg; } catch { }
-                    throw new Error(errMsg);
-                }
+                return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送 (Desktop)。' };
             }
-            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送，請檢查您的信箱 (由管理員信箱發出)。' };
+
+            // Web Environment: Use Standard Supabase Reset (Phase 1 Logic)
+            // This runs entirely on the client side, bypassing Vercel backend environment issues.
+            const redirectUrl = window.location.origin + '/?reset=true';
+
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: redirectUrl
+            });
+
+            if (error) {
+                // If frequent "Rate Limit" errors occur, it means Supabase protection is active.
+                throw error;
+            }
+
+            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送！請檢查您的信箱。' };
 
         } catch (e: any) {
-            console.warn("Custom reset password failed, trying default Supabase method as fallback...", e);
-
-            // Fallback: Default Supabase Reset (Supabase SMTP)
-            // Even if custom fails, we try the default just in case, but usually we want the custom one.
-            // If the user specifically asked for "Custom Email" because Supabase one is broken/ugly, 
-            // we should probably report the error instead of silently falling back to the broken one.
-            // BUT, for reliability, let's just return the error so the user knows to fix the Admin Settings.
-            return { success: false, messageKey: 'resetPasswordFailed', message: e.message };
+            console.error("Reset password failed:", e);
+            return { success: false, messageKey: 'resetPasswordFailed', message: e.message || '發送失敗，請稍後再試。' };
         }
     };
 
