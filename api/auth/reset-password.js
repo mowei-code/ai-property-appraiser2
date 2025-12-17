@@ -37,10 +37,23 @@ export default async function handler(req, res) {
     // Critical check: If key is missing, fail fast.
     if (!supabaseAdmin) {
         console.error('[Reset Password API] Supabase Admin not initialized.');
-        // Don't expose env vars in production errors for security, just state what is missing.
+
+        // DEBUG: List all keys to see what Vercel is actually giving us
+        const allEnvKeys = Object.keys(process.env).sort();
+        const supabaseKeys = allEnvKeys.filter(k => k.includes('SUPABASE'));
+
         return res.status(500).json({
             success: false,
-            message: 'Server Error: Admin Client not initialized. Missing SUPABASE_SERVICE_ROLE_KEY.'
+            message: 'Debug Mode: Admin Init Failed.',
+            debug: {
+                hasUrl: !!SUPABASE_URL,
+                hasKey: !!SERVICE_ROLE_KEY,
+                urlType: typeof SUPABASE_URL,
+                keyType: typeof SERVICE_ROLE_KEY,
+                envKeysContainingSupabase: supabaseKeys,
+                // Do not expose values, only names
+                allEnvKeysSnippet: allEnvKeys.slice(0, 15)
+            }
         });
     }
 
