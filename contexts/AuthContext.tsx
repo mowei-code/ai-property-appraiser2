@@ -484,12 +484,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // Web Environment: Use Standard Supabase Reset (Phase 1 Logic)
-            // This runs entirely on the client side, bypassing Vercel backend environment issues.
-            const redirectUrl = window.location.origin + '/?reset=true';
-
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: redirectUrl
-            });
+            // We remove the explicit 'redirectTo' to fallback to the Default Site URL configured in Supabase.
+            // This avoids "Link Invalid" errors if the whitelist is missing specific paths.
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
 
             if (error) {
                 // If frequent "Rate Limit" errors occur, it means Supabase protection is active.
