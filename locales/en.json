@@ -1,3 +1,4 @@
+
 {
   "appTitle": "AI Property Appraiser",
   "loginOrRegister": "Login / Register",
@@ -333,6 +334,8 @@
   "contactEmail": "Contact Email",
   "rightsReserved": "All Rights Reserved",
   "references": "References",
+  "clickToLogin": "Click here to Login",
+  "registrationSuccessPrompt": "Your account has been successfully created. Please login with your new account.",
   "planMonthly": "Subscription (Monthly)",
   "planBiannual": "Subscription (6 Months)",
   "planYearly": "Subscription (Yearly)",
@@ -361,18 +364,5 @@
   "paymentFailed": "Payment failed, please try again later.",
   "paymentError": "Error connecting to PayPal.",
   "paypalNotConfigured": "PayPal account not configured. Please contact admin.",
-  "invalidLoginCredentials": "Invalid login credentials.",
-  "preferences": "Preferences",
-  "apiKeyDescription": "We recommend using your own API Key for privacy and stability. Your key is stored locally.",
-  "save": "Save",
-  "changePassword": "Change Password",
-  "newPassword": "New Password",
-  "newPasswordPlaceholder": "Leave blank to keep unchanged",
-  "confirmNewPassword": "Confirm New Password",
-  "confirmPasswordPlaceholder": "Re-enter new password",
-  "resetPasswordTitle": "Reset Password",
-  "resetPasswordDescription": "Please enter your registered email address. The system will send you a reset link.",
-  "sendResetEmail": "Send Reset Email",
-  "backToLogin": "Back to Login",
-  "forgotPassword": "Forgot Password?"
+  "back": "Back"
 }

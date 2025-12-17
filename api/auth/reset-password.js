@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
-// Standard logic: Use VITE_SUPABASE_URL (public) and SUPABASE_SERVICE_ROLE_KEY (private/backend-only)
+// WORKAROUND: Vercel only exposes VITE_ prefixed env vars to Serverless Functions
+// This is contrary to documentation but confirmed through testing
+// Using VITE_ prefix for all environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-// Triple fallback: Try Standard -> VITE prefix -> Custom Name (to bypass strict filters)
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.APP_ADMIN_KEY;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseAdmin = null;
 
@@ -35,24 +36,23 @@ export default async function handler(req, res) {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
     }
 
-    // Critical check: If key is missing, fail fast.
     if (!supabaseAdmin) {
-        console.error('[Reset Password API] Supabase Admin not initialized.');
-
-        // DEBUG: List all keys to see what Vercel is actually giving us
-        const allEnvKeys = Object.keys(process.env).sort();
-        const supabaseKeys = allEnvKeys.filter(k => k.includes('SUPABASE'));
-
-        // Force the debug info into the message string so the UI displays it
-        const debugMessage = `Debug Failed. Vars Found: [${supabaseKeys.join(', ')}]. Total vars: ${allEnvKeys.length}`;
-
+        const availableKeys = Object.keys(process.env)
+            .filter(k => k.includes('SUPABASE'))
+            .join(', ');
+        const debugInfo = `URL=${!!SUPABASE_URL}, Key=${!!SERVICE_ROLE_KEY}, KeyLen=${SERVICE_ROLE_KEY ? SERVICE_ROLE_KEY.length : 0}, Available=[${availableKeys}]`;
+        console.error('[Reset Password API] Supabase Admin not initialized:', debugInfo);
+        console.error('[Reset Password API] CRITICAL: Vercel Serverless Functions cannot read VITE_ prefixed env vars!');
+        console.error('[Reset Password API] Please add SUPABASE_SERVICE_ROLE_KEY (without VITE_ prefix) in Vercel Dashboard');
         return res.status(500).json({
             success: false,
-            message: debugMessage
+            message: `Server misconfigured: No Admin Client. Please add SUPABASE_SERVICE_ROLE_KEY environment variable in Vercel (without VITE_ prefix). Debug: ${debugInfo}`
         });
     }
 
     const { email } = req.body;
+    // For Vercel, we can assume https unless set otherwise, or rely on referer
+    // req.headers.origin is usually available
     const origin = req.headers.origin || 'https://ai-property-appraiser.vercel.app';
 
     try {
@@ -63,12 +63,12 @@ export default async function handler(req, res) {
             .maybeSingle();
 
         if (settingsError || !settings) {
-            return res.status(500).json({ success: false, message: 'Failed to fetch SMTP settings from database.' });
+            return res.status(500).json({ success: false, message: 'Failed to fetch SMTP settings.' });
         }
 
         const { smtp_host, smtp_port, smtp_user, smtp_pass } = settings;
         if (!smtp_host || !smtp_user || !smtp_pass) {
-            return res.status(400).json({ success: false, message: 'SMTP settings are incomplete.' });
+            return res.status(400).json({ success: false, message: 'SMTP settings incomplete in DB.' });
         }
 
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -97,10 +97,11 @@ export default async function handler(req, res) {
             text: mailText
         });
 
-        return res.status(200).json({ success: true, message: 'Password reset email sent successfully.' });
+        console.log('[Vercel API] Recovery email sent.');
+        return res.status(200).json({ success: true, message: 'Password reset email sent.' });
 
     } catch (e) {
-        console.error('[Reset Password API] Error:', e);
-        return res.status(500).json({ success: false, message: e.message || 'Internal Server Error' });
+        console.error('[Vercel API] Reset Password Error:', e);
+        return res.status(500).json({ success: false, message: e.message });
     }
 }

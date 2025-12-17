@@ -408,7 +408,7 @@ export const SettingsModal: React.FC = () => {
                                         name="apiKey"
                                         value={localSettings.apiKey}
                                         onChange={handleChange}
-                                        placeholder={t('enterYourGeminiApiKey')}
+                                        placeholder={t('enterApiKey')}
                                         className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                     />
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -426,35 +426,35 @@ export const SettingsModal: React.FC = () => {
                                     onChange={handleChange}
                                     className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                 >
-                                    <option value="system">{t('theme_system')}</option>
-                                    <option value="light">{t('theme_light')}</option>
-                                    <option value="dark">{t('theme_dark')}</option>
+                                    <option value="system">{t('themeSystem')}</option>
+                                    <option value="light">{t('themeLight')}</option>
+                                    <option value="dark">{t('themeDark')}</option>
                                 </select>
                             </div>
 
                             {/* Password Change Section */}
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{t('changePassword')}</h4>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">變更密碼</h4>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('newPassword')}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">新密碼 (New Password)</label>
                                         <input
                                             type="password"
                                             name="newPassword"
                                             value={(localSettings as any).newPassword || ''}
                                             onChange={handleChange}
-                                            placeholder={t('newPasswordPlaceholder')}
+                                            placeholder="若不變更請留白"
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('confirmNewPassword')}</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">確認新密碼 (Confirm Password)</label>
                                         <input
                                             type="password"
                                             name="confirmPassword"
                                             value={(localSettings as any).confirmPassword || ''}
                                             onChange={handleChange}
-                                            placeholder={t('confirmPasswordPlaceholder')}
+                                            placeholder="再次輸入新密碼"
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
@@ -481,7 +481,7 @@ export const SettingsModal: React.FC = () => {
                                         <CheckCircleIcon className="h-5 w-5" />
                                         {t('saved')}
                                     </>
-                                ) : t('saveSettings')}
+                                ) : t('save')}
                             </button>
                         </div>
                     </form>

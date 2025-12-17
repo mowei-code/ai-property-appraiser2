@@ -1,3 +1,4 @@
+
 {
   "appTitle": "AI 房产估价师",
   "loginOrRegister": "登录 / 注册",
@@ -333,6 +334,8 @@
   "contactEmail": "联络信箱",
   "rightsReserved": "版权所有",
   "references": "参考资料",
+  "clickToLogin": "点此登录",
+  "registrationSuccessPrompt": "您的帐号已建立成功。请使用您刚注册的帐号密码进行登录。",
   "planMonthly": "订阅会员 (一个月)",
   "planBiannual": "订阅会员 (半年)",
   "planYearly": "订阅会员 (一年)",
@@ -361,18 +364,5 @@
   "paymentFailed": "付款失败，请稍后再试。",
   "paymentError": "连接 PayPal 时发生错误。",
   "paypalNotConfigured": "系统尚未设定 PayPal 收款帐号，请联系管理员。",
-  "invalidLoginCredentials": "帐号或密码错误",
-  "preferences": "偏好设定",
-  "apiKeyDescription": "我们建议您使用自己的 API Key 以确保隐私及稳定性。您的 Key 只会储存在本地端浏览器。",
-  "save": "保存",
-  "changePassword": "变更密码",
-  "newPassword": "新密码",
-  "newPasswordPlaceholder": "若不变更请留白",
-  "confirmNewPassword": "确认新密码",
-  "confirmPasswordPlaceholder": "再次输入新密码",
-  "resetPasswordTitle": "重设密码",
-  "resetPasswordDescription": "请输入您的注册 Email,系统将发送重设信件给您。",
-  "sendResetEmail": "发送重设信",
-  "backToLogin": "返回登录",
-  "forgotPassword": "忘记密码?"
+  "back": "返回"
 }
