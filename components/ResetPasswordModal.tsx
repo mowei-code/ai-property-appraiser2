@@ -38,15 +38,15 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newPassword || !confirmPassword) {
-            setError(t('error_fillEmailPassword')); // Reuse existing error key or use plain text
+            setError(t('error_fillEmailPassword'));
             return;
         }
         if (newPassword !== confirmPassword) {
-            setError('兩次輸入的密碼不一致');
+            setError(t('error_passwordMismatch'));
             return;
         }
         if (newPassword.length < 6) {
-            setError('密碼長度至少需 6 碼');
+            setError(t('error_passwordTooShort'));
             return;
         }
 
@@ -66,11 +66,11 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                     setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
                 }
             } else {
-                setError('找不到使用者 Session，請重新點擊 Email 連結。');
+                setError(t('error_noSession'));
             }
         } catch (err: any) {
             console.error(err);
-            setError('發生未知錯誤');
+            setError(t('unknownError') || '發生未知錯誤');
         } finally {
             setIsLoading(false);
         }
@@ -82,7 +82,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                 <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-slate-900/50">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
                         <SparklesIcon className="h-6 w-6 text-blue-600" />
-                        重設您的密碼
+                        {t('resetPasswordTitle')}
                     </h2>
                     {/* No Close Button - User MUST reset or leave page */}
                 </header>
@@ -93,8 +93,8 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                             <div className="flex justify-center">
                                 <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
-                            <p className="text-lg font-bold text-green-600 dark:text-green-400">密碼重設成功！</p>
-                            <p className="text-gray-600 dark:text-gray-300">正在為您登入系統...</p>
+                            <p className="text-lg font-bold text-green-600 dark:text-green-400">{t('resetSuccessTitle')}</p>
+                            <p className="text-gray-600 dark:text-gray-300">{t('resetSuccessMessage')}</p>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -108,7 +108,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                                     type={showPassword ? "text" : "password"}
                                     value={newPassword}
                                     onChange={e => setNewPassword(e.target.value)}
-                                    placeholder="新密碼 (New Password)"
+                                    placeholder={t('newPasswordPlaceholder')}
                                     className={inputClass}
                                     required
                                 />
@@ -119,7 +119,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
                                     type={showPassword ? "text" : "password"}
                                     value={confirmPassword}
                                     onChange={e => setConfirmPassword(e.target.value)}
-                                    placeholder="確認新密碼 (Confirm Password)"
+                                    placeholder={t('confirmPasswordPlaceholder')}
                                     className={inputClass}
                                     required
                                 />
@@ -136,7 +136,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ onSucces
 
                             <button type="submit" disabled={isLoading} className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
                                 {isLoading && <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>}
-                                確認重設
+                                {t('confirmReset')}
                             </button>
                         </form>
                     )}

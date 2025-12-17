@@ -77,43 +77,80 @@ export const mockProperties: Property[] = [
 ];
 
 export const getMockProperties = (language: Language): Property[] => {
-    const baseProperties: Property[] = JSON.parse(JSON.stringify(mockProperties));
+  const baseProperties: Property[] = JSON.parse(JSON.stringify(mockProperties));
 
-    if (language === 'en') {
-        baseProperties[0].address = 'No. 79-1, Section 2, Roosevelt Rd, Da\'an District, Taipei City';
-        baseProperties[0].floor = '9F / 12F';
-        baseProperties[1].address = 'No. 100, Section 1, Wenhua Rd, Banqiao District, New Taipei City';
-        baseProperties[1].floor = '4F / 5F';
-        baseProperties[2].address = 'No. 301, Section 3, Taiwan Blvd, Xitun District, Taichung City';
-        baseProperties[2].floor = '11F / 22F';
-        baseProperties[3].address = 'No. 777, Bo\'ai 2nd Rd, Zuoying District, Kaohsiung City';
-        baseProperties[3].floor = '1-4F / 4F';
-        return baseProperties;
-    }
-    if (language === 'zh-CN') {
-        baseProperties[0].address = '台北市大安区罗斯福路二段79之1号';
-        baseProperties[0].floor = '9楼 / 12楼';
-        baseProperties[1].address = '新北市板桥区文化路一段100号';
-        baseProperties[1].floor = '4楼 / 5楼';
-        baseProperties[2].address = '台中市西屯区台湾大道三段301号';
-        baseProperties[2].floor = '11楼 / 22楼';
-        baseProperties[3].address = '高雄市左营区博爱二路777号';
-        baseProperties[3].floor = '1-4楼 / 4楼';
-        return baseProperties;
-    }
-    if (language === 'ja') {
-        baseProperties[0].address = '台北市大安区羅斯福路二段79之1号';
-        baseProperties[0].floor = '9階 / 12階';
-        baseProperties[1].address = '新北市板橋区文化路一段100号';
-        baseProperties[1].floor = '4階 / 5階';
-        baseProperties[2].address = '台中市西屯区台湾大道三段301号';
-        baseProperties[2].floor = '11階 / 22階';
-        baseProperties[3].address = '高雄市左営区博愛二路777号';
-        baseProperties[3].floor = '1-4階 / 4階';
-        return baseProperties;
-    }
-    
-    return baseProperties; // For zh-TW
+  if (language === 'en') {
+    // Prop 1 (Taipei)
+    baseProperties[0].address = 'No. 79-1, Section 2, Roosevelt Rd, Da\'an District, Taipei City';
+    baseProperties[0].city = 'Taipei City';
+    baseProperties[0].district = 'Da\'an District';
+    baseProperties[0].floor = '9F / 12F';
+    // Prop 2 (New Taipei)
+    baseProperties[1].address = 'No. 100, Section 1, Wenhua Rd, Banqiao District, New Taipei City';
+    baseProperties[1].city = 'New Taipei City';
+    baseProperties[1].district = 'Banqiao District';
+    baseProperties[1].floor = '4F / 5F';
+    // Prop 3 (Taichung)
+    baseProperties[2].address = 'No. 301, Section 3, Taiwan Blvd, Xitun District, Taichung City';
+    baseProperties[2].city = 'Taichung City';
+    baseProperties[2].district = 'Xitun District';
+    baseProperties[2].floor = '11F / 22F';
+    // Prop 4 (Kaohsiung)
+    baseProperties[3].address = 'No. 777, Bo\'ai 2nd Rd, Zuoying District, Kaohsiung City';
+    baseProperties[3].city = 'Kaohsiung City';
+    baseProperties[3].district = 'Zuoying District';
+    baseProperties[3].floor = '1-4F / 4F';
+
+    return baseProperties;
+  }
+  if (language === 'zh-CN') {
+    baseProperties[0].address = '台北市大安区罗斯福路二段79之1号';
+    baseProperties[0].city = '台北市';
+    baseProperties[0].district = '大安区';
+    baseProperties[0].floor = '9楼 / 12楼';
+
+    baseProperties[1].address = '新北市板桥区文化路一段100号';
+    baseProperties[1].city = '新北市';
+    baseProperties[1].district = '板桥区';
+    baseProperties[1].floor = '4楼 / 5楼';
+
+    baseProperties[2].address = '台中市西屯区台湾大道三段301号';
+    baseProperties[2].city = '台中市';
+    baseProperties[2].district = '西屯区';
+    baseProperties[2].floor = '11楼 / 22楼';
+
+    baseProperties[3].address = '高雄市左营区博爱二路777号';
+    baseProperties[3].city = '高雄市';
+    baseProperties[3].district = '左营区';
+    baseProperties[3].floor = '1-4楼 / 4楼';
+
+    return baseProperties;
+  }
+  if (language === 'ja') {
+    baseProperties[0].address = '台北市大安区羅斯福路二段79之1号';
+    baseProperties[0].city = '台北市';
+    baseProperties[0].district = '大安区';
+    baseProperties[0].floor = '9階 / 12階';
+
+    baseProperties[1].address = '新北市板橋区文化路一段100号';
+    baseProperties[1].city = '新北市';
+    baseProperties[1].district = '板橋区';
+    baseProperties[1].floor = '4階 / 5階';
+
+    baseProperties[2].address = '台中市西屯区台湾大道三段301号';
+    baseProperties[2].city = '台中市';
+    baseProperties[2].district = '西屯区';
+    baseProperties[2].floor = '11階 / 22階';
+
+    baseProperties[3].address = '高雄市左営区博愛二路777号';
+    baseProperties[3].city = '高雄市';
+    baseProperties[3].district = '左営区';
+    baseProperties[3].floor = '1-4階 / 4階';
+
+    return baseProperties;
+  }
+
+  return baseProperties; // For zh-TW
 };
 
 export const initialFilters: Filters = {

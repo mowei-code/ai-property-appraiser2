@@ -47,12 +47,13 @@ export const LoginModal: React.FC = () => {
     try {
       const result = await resetPassword(email);
       if (result.success) {
-        setSuccessMsg(result.message || 'Email sent.');
+        setSuccessMsg(result.message || t('resetSuccessMessage')); // Use translated default if no message
       } else {
+        // Here we could map technical errors to keys if needed
         setError(result.message || 'Failed to send reset email.');
       }
     } catch (e) {
-      setError('Unexpected error');
+      setError(t('error_fillEmailPassword')); // Fallback or new key
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +98,7 @@ export const LoginModal: React.FC = () => {
     setError('');
 
     if (!isSupabaseConfigured) {
-      setError('未設定 Supabase 連線 (.env)');
+      setError(t('error_noSupabase') || '未設定 Supabase 連線 (.env)');
       return;
     }
 
@@ -130,12 +131,17 @@ export const LoginModal: React.FC = () => {
       } else {
         const loginResult = await login(email, password);
         if (!loginResult.success) {
-          setError(loginResult.message || t('loginFailed'));
+          // Check for known error message "Invalid login credentials"
+          if (loginResult.message && loginResult.message.includes("Invalid login credentials")) {
+            setError(t('loginFailed'));
+          } else {
+            setError(loginResult.message || t('loginFailed'));
+          }
         }
       }
     } catch (e) {
       console.error("Form error:", e);
-      setError('發生未預期的錯誤');
+      setError(t('unknownError') || '發生未預期的錯誤');
     } finally {
       setIsLoading(false);
     }
@@ -163,8 +169,8 @@ export const LoginModal: React.FC = () => {
             isForgotPassword ? (
               <div className="space-y-4">
                 <div className="text-center mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">重設密碼</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">請輸入您的註冊 Email，系統將發送重設信件給您。</p>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">{t('resetPasswordTitle')}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('resetPasswordInstruction')}</p>
                 </div>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('email')} className={inputClass} required disabled={!isSupabaseConfigured} />
 
@@ -181,11 +187,11 @@ export const LoginModal: React.FC = () => {
 
                 <button type="button" onClick={handleForgotPasswordSubmit} disabled={isLoading || !isSupabaseConfigured} className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading || !isSupabaseConfigured ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
                   {isLoading && <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>}
-                  發送重設信
+                  {t('sendResetEmail')}
                 </button>
                 <div className="text-center mt-4">
                   <button type="button" onClick={() => { setIsForgotPassword(false); setError(''); setSuccessMsg(''); }} className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:underline">
-                    返回登入
+                    {t('backToLogin')}
                   </button>
                 </div>
               </div>
@@ -226,7 +232,7 @@ export const LoginModal: React.FC = () => {
                   </p>
                   {!isRegister && (
                     <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setSuccessMsg(''); }} className="text-blue-600 dark:text-blue-400 hover:underline">
-                      忘記密碼？
+                      {t('forgotPasswordLink')}
                     </button>
                   )}
                 </div>

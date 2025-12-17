@@ -161,19 +161,19 @@ export const SettingsModal: React.FC = () => {
 
         if (newPwd || confirmPwd) {
             if (newPwd !== confirmPwd) {
-                alert("新密碼與確認密碼不符！密碼未更新。");
+                alert(t('passwordMismatchAlert'));
                 return;
             }
             if (newPwd.length < 6) {
-                alert("密碼長度至少需 6 碼！密碼未更新。");
+                alert(t('passwordTooShortAlert'));
                 return;
             }
             if (currentUser) {
                 const result = await updateUser(currentUser.email, { password: newPwd });
                 if (!result.success) {
-                    alert("密碼更新失敗: " + t(result.messageKey) + (result.message ? " " + result.message : ""));
+                    alert(t('passwordUpdateFailedPrefix') + t(result.messageKey) + (result.message ? " " + result.message : ""));
                 } else {
-                    alert("密碼已成功更新！");
+                    alert(t('passwordUpdateSuccessAlert'));
                     // Clear fields logic locally if needed, but we close modal anyway
                 }
             }
@@ -326,9 +326,9 @@ export const SettingsModal: React.FC = () => {
                                         ) : (
                                             <div className="text-center p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                                                 <ExclamationTriangleIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                                                <p className="text-sm text-gray-500">PayPal Client ID 未設定</p>
+                                                <p className="text-sm text-gray-500">{t('paypalClientIdNotSet')}</p>
                                                 {currentUser?.role === '管理員' && (
-                                                    <p className="text-xs text-gray-400 mt-1">請至管理後台設定</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{t('configureInAdmin')}</p>
                                                 )}
                                             </div>
                                         )}
@@ -426,35 +426,35 @@ export const SettingsModal: React.FC = () => {
                                     onChange={handleChange}
                                     className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                 >
-                                    <option value="system">{t('themeSystem')}</option>
-                                    <option value="light">{t('themeLight')}</option>
-                                    <option value="dark">{t('themeDark')}</option>
+                                    <option value="system">{t('theme_system')}</option>
+                                    <option value="light">{t('theme_light')}</option>
+                                    <option value="dark">{t('theme_dark')}</option>
                                 </select>
                             </div>
 
                             {/* Password Change Section */}
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">變更密碼</h4>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{t('changePassword')}</h4>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">新密碼 (New Password)</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('newPasswordLabel')}</label>
                                         <input
                                             type="password"
                                             name="newPassword"
                                             value={(localSettings as any).newPassword || ''}
                                             onChange={handleChange}
-                                            placeholder="若不變更請留白"
+                                            placeholder={t('passwordPlaceholderEdit')}
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">確認新密碼 (Confirm Password)</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">{t('confirmPasswordLabel')}</label>
                                         <input
                                             type="password"
                                             name="confirmPassword"
                                             value={(localSettings as any).confirmPassword || ''}
                                             onChange={handleChange}
-                                            placeholder="再次輸入新密碼"
+                                            placeholder={t('passwordPlaceholderConfirm')}
                                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
