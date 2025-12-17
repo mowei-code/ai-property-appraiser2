@@ -42,18 +42,12 @@ export default async function handler(req, res) {
         const allEnvKeys = Object.keys(process.env).sort();
         const supabaseKeys = allEnvKeys.filter(k => k.includes('SUPABASE'));
 
+        // Force the debug info into the message string so the UI displays it
+        const debugMessage = `Debug Failed. Vars Found: [${supabaseKeys.join(', ')}]. Total vars: ${allEnvKeys.length}`;
+
         return res.status(500).json({
             success: false,
-            message: 'Debug Mode: Admin Init Failed.',
-            debug: {
-                hasUrl: !!SUPABASE_URL,
-                hasKey: !!SERVICE_ROLE_KEY,
-                urlType: typeof SUPABASE_URL,
-                keyType: typeof SERVICE_ROLE_KEY,
-                envKeysContainingSupabase: supabaseKeys,
-                // Do not expose values, only names
-                allEnvKeysSnippet: allEnvKeys.slice(0, 15)
-            }
+            message: debugMessage
         });
     }
 
