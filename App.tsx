@@ -19,6 +19,7 @@ import { InstructionManual } from './components/InstructionManual';
 import { QuestionMarkCircleIcon } from './components/icons/QuestionMarkCircleIcon';
 import { AboutModal } from './components/AboutModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
+import { GlobeAltIcon } from './components/icons/GlobeAltIcon';
 
 
 const AppContent: React.FC = () => {
@@ -40,9 +41,10 @@ const AppContent: React.FC = () => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isInstructionManualOpen, setInstructionManualOpen] = useState(false);
   const [isAboutModalOpen, setAboutModalOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
 
   const { currentUser, isLoginModalOpen, isAdminPanelOpen, setLoginModalOpen, isPasswordRecoveryMode, setIsPasswordRecoveryMode } = useContext(AuthContext);
-  const { settings, getApiKey, t, setSettingsModalOpen } = useContext(SettingsContext);
+  const { settings, getApiKey, t, setSettingsModalOpen, saveSettings } = useContext(SettingsContext);
 
   // Fallback: If Context missed the URL param, we catch it here and force the mode.
   // Fallback: If Context missed the URL param, we catch it here and force the mode.
@@ -575,7 +577,7 @@ const AppContent: React.FC = () => {
         </main>
       ) : (
         <main className="flex-grow flex flex-col items-center justify-center p-4 text-center">
-          <div className="bg-white/80 backdrop-blur-md dark:bg-slate-800/80 p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700 max-w-lg animate-fade-in-up">
+          <div className="relative bg-white/80 backdrop-blur-md dark:bg-slate-800/80 p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700 max-w-lg animate-fade-in-up">
             <div className="mx-auto inline-block mb-6 transform hover:scale-110 transition-transform duration-300">
               <img src="/logo.png" alt="App Logo" className="h-20 w-auto object-contain drop-shadow-xl" />
             </div>
@@ -583,6 +585,40 @@ const AppContent: React.FC = () => {
             <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
               {t('welcomeMessageBody')}
             </p>
+
+            {/* Language Selector in Welcome Card */}
+            <div className="absolute top-6 right-6">
+              <div className="relative">
+                <button
+                  onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                  className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors duration-200 border border-slate-200 dark:border-slate-600"
+                  title={t('language')}
+                >
+                  <GlobeAltIcon className="h-5 w-5" />
+                </button>
+
+                {isLangMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-2 z-50 animate-fade-in">
+                    {(['zh-TW', 'zh-CN', 'en', 'ja'] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => {
+                          saveSettings({ language: lang });
+                          setIsLangMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${settings.language === lang
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                      >
+                        {t(`lang_${lang}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center justify-center gap-3 w-full">
               {/* Spacer for visual balance on desktop to ensure the main button is perfectly centered */}
               <div className="w-[54px] hidden sm:block" aria-hidden="true"></div>
