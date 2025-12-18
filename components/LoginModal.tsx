@@ -47,10 +47,9 @@ export const LoginModal: React.FC = () => {
     try {
       const result = await resetPassword(email);
       if (result.success) {
-        setSuccessMsg(result.message || t('resetSuccessMessage')); // Use translated default if no message
+        setSuccessMsg(t(result.messageKey));
       } else {
-        // Here we could map technical errors to keys if needed
-        setError(result.message || 'Failed to send reset email.');
+        setError(t(result.messageKey) || 'Failed to send reset email.');
       }
     } catch (e) {
       setError(t('error_fillEmailPassword')); // Fallback or new key

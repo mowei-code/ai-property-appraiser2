@@ -493,7 +493,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     throw new Error(errMsg);
                 }
             }
-            return { success: true, messageKey: 'resetPasswordSuccess', message: '重設密碼信件已發送，請檢查您的信箱 (由管理員信箱發出)。' };
+            return { success: true, messageKey: 'resetPasswordSuccess' };
 
         } catch (e: any) {
             console.warn("Custom reset password failed, trying default Supabase method as fallback...", e);
