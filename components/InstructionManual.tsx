@@ -15,13 +15,13 @@ interface InstructionManualProps {
 }
 
 export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, onClose }) => {
-  const { t } = useContext(SettingsContext);
+  const { t, settings } = useContext(SettingsContext);
   const contentRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) {
     return null;
   }
-  
+
   const generateContent = (format: 'txt' | 'md'): string => {
     const isMd = format === 'md';
     const h1 = isMd ? '# ' : '';
@@ -59,12 +59,12 @@ export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, on
     content += `${li}${b}${t('admin')}:${b} ${t('manualRoleAdminDesc')}\n`;
     content += `${li}${b}${t('paidUser')}:${b} ${t('manualRolePaidDesc')}\n`;
     content += `${li}${b}${t('generalUser')}:${b} ${t('manualRoleGeneralDesc')}\n`;
-    
+
     return content;
   };
 
   const handleExport = (format: ExportFormat) => {
-     if (format === 'pdf') {
+    if (format === 'pdf') {
       handlePrint('instruction-manual-content', t('manualTitle'));
       return;
     }
@@ -98,86 +98,87 @@ export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, on
       aria-modal="true"
       aria-labelledby="instruction-manual-title"
     >
-        <div
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden border-2 border-black dark:border-gray-600"
-            onClick={e => e.stopPropagation()}
-        >
-            <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 no-print">
-              <h2 id="instruction-manual-title" className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <BookOpenIcon className="h-6 w-6 text-blue-600" />
-                {t('manualTitle')}
-              </h2>
-              <div className="flex items-center gap-2">
-                <button onClick={() => handlePrint('instruction-manual-content', t('manualTitle'))} className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title={t('printInstructions')}>
-                    <PrinterIcon className="h-5 w-5 dark:text-gray-300" />
-                </button>
-                <ExportButton onExport={handleExport} />
-                <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('close')}>
-                  <XMarkIcon className="h-6 w-6 dark:text-gray-300" />
-                </button>
-              </div>
-            </header>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden border-2 border-black dark:border-gray-600"
+        onClick={e => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 no-print">
+          <h2 id="instruction-manual-title" className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <BookOpenIcon className="h-6 w-6 text-blue-600" />
+            {t('manualTitle')}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handlePrint('instruction-manual-content', t('manualTitle'))} className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title={t('printInstructions')}>
+              <PrinterIcon className="h-5 w-5 dark:text-gray-300" />
+            </button>
+            <ExportButton onExport={handleExport} />
+            <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('close')}>
+              <XMarkIcon className="h-6 w-6 dark:text-gray-300" />
+            </button>
+          </div>
+        </header>
 
-            <main ref={contentRef} id="instruction-manual-content" className="p-6 overflow-y-auto printable-area">
-                <div className="print-title">{t('manualTitle')}</div>
-                <Section title={t('manualIntroTitle')}>
-                    <p>{t('manualIntroBody')}</p>
-                </Section>
-                
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700 flex items-start gap-3 my-4">
-                    <ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm" dangerouslySetInnerHTML={{ __html: t('manualDisclaimer') }}></p>
-                </div>
+        <main ref={contentRef} id="instruction-manual-content" className="p-6 overflow-y-auto printable-area">
+          <div className="print-title">{t('manualTitle')}</div>
+          <Section title={t('manualIntroTitle')}>
+            <p>{t('manualIntroBody')}</p>
+          </Section>
 
-                <Section title={t('manualGettingStartedTitle')}>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">{t('manualLoginTitle')}</h4>
-                    <p>{t('manualLoginBody')}</p>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualApiKeyTitle')}</h4>
-                    <p>{t('manualApiKeyBody1')}</p>
-                    <ul className="list-disc list-inside pl-4 mt-1">
-                        <li>{t('manualApiKeyBody2')}</li>
-                        <li>{t('manualApiKeyBody3')}</li>
-                    </ul>
-                </Section>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700 flex items-start gap-3 my-4">
+            <ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+            <p className="text-sm" dangerouslySetInnerHTML={{ __html: t('manualDisclaimer') }}></p>
+          </div>
 
-                <Section title={t('manualMainFeaturesTitle')}>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">{t('manualValuationTitle')}</h4>
-                    <p>{t('manualValuationBody1')}</p>
-                    <ul className="list-disc list-inside pl-4 mt-1 space-y-1">
-                        <li><strong>{t('comprehensiveMarketFactors')}:</strong> {t('manualBasisDesc1')}</li>
-                        <li><strong>{t('actualTransactions')}:</strong> {t('manualBasisDesc2')}</li>
-                        <li><strong>{t('realtorPerspective')}:</strong> {t('manualBasisDesc3')}</li>
-                        <li><strong>{t('actualPingSize')}:</strong> {t('manualBasisDesc4')}</li>
-                        <li><strong>{t('regionalDevelopmentPotential')}:</strong> {t('manualBasisDesc5')}</li>
-                        <li><strong>{t('foreclosureInfo')}:</strong> {t('manualBasisDesc6')}</li>
-                        <li><strong>{t('rentalYieldAnalysis')}:</strong> {t('manualBasisDesc7')}</li>
-                        <li><strong>{t('bankAppraisalModel')}:</strong> {t('manualBasisDesc8')}</li>
-                    </ul>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualMapSearchTitle')}</h4>
-                    <p>{t('manualMapSearchBody')}</p>
-                     <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualReportFeatureTitle')}</h4>
-                    <p>{t('manualReportFeatureBody')}</p>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualScenarioAnalysisTitle')}</h4>
-                    <p>{t('manualScenarioAnalysisBody')}</p>
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualComparisonTitle')}</h4>
-                    <p>{t('manualComparisonBody')}</p>
-                </Section>
-                
-                <Section title={t('manualUserRolesTitle')}>
-                    <p>{t('manualUserRolesBody')}</p>
-                     <ul className="list-disc list-inside pl-4 mt-1">
-                        <li><strong>{t('admin')}:</strong> {t('manualRoleAdminDesc')}</li>
-                        <li><strong>{t('paidUser')}:</strong> {t('manualRolePaidDesc')}</li>
-                        <li><strong>{t('generalUser')}:</strong> {t('manualRoleGeneralDesc')}</li>
-                    </ul>
-                </Section>
+          <Section title={t('manualGettingStartedTitle')}>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200">{t('manualLoginTitle')}</h4>
+            <p>{t('manualLoginBody')}</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualApiKeyTitle')}</h4>
+            <p>{t('manualApiKeyBody1')}</p>
+            <ul className="list-disc list-inside pl-4 mt-1">
+              <li>{t('manualApiKeyBody2')}</li>
+              <li>{t('manualApiKeyBody3')}</li>
+            </ul>
+          </Section>
 
-                <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-4 text-center text-xs text-gray-400">
-                    <p>{t('appTitle')} {APP_VERSION}</p>
-                    <p>{t('releaseDate')}: {APP_RELEASE_DATE}</p>
-                </div>
-            </main>
-        </div>
+          <Section title={t('manualMainFeaturesTitle')}>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200">{t('manualValuationTitle')}</h4>
+            <p>{t('manualValuationBody1')}</p>
+            <ul className="list-disc list-inside pl-4 mt-1 space-y-1">
+              <li><strong>{t('comprehensiveMarketFactors')}:</strong> {t('manualBasisDesc1')}</li>
+              <li><strong>{t('actualTransactions')}:</strong> {t('manualBasisDesc2')}</li>
+              <li><strong>{t('realtorPerspective')}:</strong> {t('manualBasisDesc3')}</li>
+              <li><strong>{t('actualPingSize')}:</strong> {t('manualBasisDesc4')}</li>
+              <li><strong>{t('regionalDevelopmentPotential')}:</strong> {t('manualBasisDesc5')}</li>
+              <li><strong>{t('foreclosureInfo')}:</strong> {t('manualBasisDesc6')}</li>
+              <li><strong>{t('rentalYieldAnalysis')}:</strong> {t('manualBasisDesc7')}</li>
+              <li><strong>{t('bankAppraisalModel')}:</strong> {t('manualBasisDesc8')}</li>
+            </ul>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualMapSearchTitle')}</h4>
+            <p>{t('manualMapSearchBody')}</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualReportFeatureTitle')}</h4>
+            <p>{t('manualReportFeatureBody')}</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualScenarioAnalysisTitle')}</h4>
+            <p>{t('manualScenarioAnalysisBody')}</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualComparisonTitle')}</h4>
+            <p>{t('manualComparisonBody')}</p>
+          </Section>
+
+          <Section title={t('manualUserRolesTitle')}>
+            <p>{t('manualUserRolesBody')}</p>
+            <ul className="list-disc list-inside pl-4 mt-1">
+              <li><strong>{t('admin')}:</strong> {t('manualRoleAdminDesc')}</li>
+              <li><strong>{t('paidUser')}:</strong> {t('manualRolePaidDesc')}</li>
+              <li><strong>{t('generalUser')}:</strong> {t('manualRoleGeneralDesc')}</li>
+            </ul>
+          </Section>
+
+          <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-4 text-center text-xs text-gray-400">
+            <p>{t('appTitle')} {t('publishVersion')}: {settings.publishVersion || APP_VERSION}</p>
+            <p>{t('releaseDate')}: {APP_RELEASE_DATE}</p>
+            {settings.publishUnit && <p>&copy; {settings.publishUnit}</p>}
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

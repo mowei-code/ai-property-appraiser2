@@ -6,6 +6,7 @@ import { SparklesIcon } from './icons/SparklesIcon';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
 import { isSupabaseConfigured } from '../supabaseClient';
+import { APP_VERSION } from '../constants';
 
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
@@ -243,7 +244,7 @@ export const LoginModal: React.FC = () => {
         {/* Footer for Copyright and Version */}
         <footer className="p-4 pt-0 text-center">
           <p className="text-[10px] text-gray-400 dark:text-slate-500 flex items-center justify-center gap-1">
-            &copy; <span className="underline">{settings.publishUnit || 'Mazylab studio'}</span> {settings.publishVersion || 'v.1120beta002'} &bull; {new Date().toISOString().split('T')[0]}
+            &copy; <span className="underline">{settings.publishUnit || 'Mazylab studio'}</span> {settings.publishVersion || APP_VERSION} &bull; {new Date().toISOString().split('T')[0]}
           </p>
         </footer>
       </div >

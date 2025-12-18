@@ -43,7 +43,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <p className="text-lg font-bold">{settings.publishUnit || 'Mazylab'}</p>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('version')}</h3>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('publishVersion')}</h3>
             <p>{settings.publishVersion || APP_VERSION}</p>
           </div>
           <div>
