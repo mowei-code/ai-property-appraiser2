@@ -11,7 +11,7 @@ interface AboutModalProps {
 }
 
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
-  const { t } = useContext(SettingsContext);
+  const { t, settings } = useContext(SettingsContext);
 
   if (!isOpen) return null;
 
@@ -38,34 +38,34 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         </header>
 
         <main className="p-6 overflow-y-auto text-gray-700 dark:text-gray-300 space-y-4">
-            <div>
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('developer')}</h3>
-                <p className="text-lg font-bold">Mazylab</p>
-            </div>
-            <div>
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('version')}</h3>
-                <p>{APP_VERSION}</p>
-            </div>
-            <div>
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('releaseDate')}</h3>
-                <p>{APP_RELEASE_DATE}</p>
-            </div>
-            <div>
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('contactEmail')}</h3>
-                <a href="mailto:twmazy@gmail.com" className="text-blue-600 hover:underline">twmazy@gmail.com</a>
-            </div>
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('references')}</h3>
-                <ul className="list-disc list-inside text-sm space-y-1">
-                    <li>{t('dataSourceMoi')}</li>
-                    <li>Google Gemini API</li>
-                    <li>OpenStreetMap / Nominatim</li>
-                </ul>
-            </div>
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 text-xs text-gray-500 text-center">
-                <p>{t('rightsReserved')}</p>
-                <p>&copy; Mazylab 2025</p>
-            </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('developer')}</h3>
+            <p className="text-lg font-bold">{settings.publishUnit || 'Mazylab'}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('version')}</h3>
+            <p>{settings.publishVersion || APP_VERSION}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('releaseDate')}</h3>
+            <p>{APP_RELEASE_DATE}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('contactEmail')}</h3>
+            <a href={`mailto:${settings.contactEmail || 'twmazy@gmail.com'}`} className="text-blue-600 hover:underline">{settings.contactEmail || 'twmazy@gmail.com'}</a>
+          </div>
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('references')}</h3>
+            <ul className="list-disc list-inside text-sm space-y-1">
+              <li>{t('dataSourceMoi')}</li>
+              <li>Google Gemini API</li>
+              <li>OpenStreetMap / Nominatim</li>
+            </ul>
+          </div>
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4 text-xs text-gray-500 text-center">
+            <p>{t('rightsReserved')}</p>
+            <p>&copy; {settings.publishUnit || 'Mazylab'} 2025</p>
+          </div>
         </main>
       </div>
     </div>

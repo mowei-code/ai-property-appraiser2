@@ -239,6 +239,13 @@ export const LoginModal: React.FC = () => {
             )
           )}
         </div >
+
+        {/* Footer for Copyright and Version */}
+        <footer className="p-4 pt-0 text-center">
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 flex items-center justify-center gap-1">
+            &copy; <span className="underline">{settings.publishUnit || 'Mazylab studio'}</span> {settings.publishVersion || 'v.1120beta002'} &bull; {new Date().toISOString().split('T')[0]}
+          </p>
+        </footer>
       </div >
     </div >
   );

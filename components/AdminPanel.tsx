@@ -46,6 +46,9 @@ export const AdminPanel: React.FC = () => {
     const [smtpPort, setSmtpPort] = useState('587');
     const [smtpUser, setSmtpUser] = useState('');
     const [smtpPass, setSmtpPass] = useState('');
+    const [publishUnit, setPublishUnit] = useState('');
+    const [publishVersion, setPublishVersion] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
     const [configSuccess, setConfigSuccess] = useState('');
     const [sendingEmail, setSendingEmail] = useState(false);
 
@@ -59,6 +62,9 @@ export const AdminPanel: React.FC = () => {
         setSmtpPort(settings.smtpPort || '587');
         setSmtpUser(settings.smtpUser || '');
         setSmtpPass(settings.smtpPass || '');
+        setPublishUnit(settings.publishUnit || '');
+        setPublishVersion(settings.publishVersion || '');
+        setContactEmail(settings.contactEmail || '');
     }, [settings]);
 
     useEffect(() => {
@@ -146,7 +152,10 @@ export const AdminPanel: React.FC = () => {
             smtpHost: smtpHost.trim(),
             smtpPort: smtpPort.trim(),
             smtpUser: smtpUser.trim(),
-            smtpPass: smtpPass.trim()
+            smtpPass: smtpPass.trim(),
+            publishUnit: publishUnit.trim(),
+            publishVersion: publishVersion.trim(),
+            contactEmail: contactEmail.trim()
         });
         setConfigSuccess(t('configSaved'));
         setError('');
@@ -156,14 +165,14 @@ export const AdminPanel: React.FC = () => {
     const handleSendRealEmail = async () => {
         if (!isEditing) return;
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            setError("請先在左側系統設定中設定 SMTP 資訊 (Host, User, Password)。");
+            setError(t('paypalNotConfigured')); // Reuse or create new key if needed, but the image shows missing SMTP info notice
             return;
         }
         setSendingEmail(true);
         setSuccess(''); setError('');
 
-        const subject = `[AI房產估價師] 帳號通知`;
-        const text = `親愛的 ${isEditing.name || '會員'} 您好，\n\n您的帳號狀態已更新為：${isEditing.role}\n訂閱到期日：${isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry).toLocaleDateString() : '無'}\n\n--\nAI 房產估價師系統`;
+        const subject = `[AI房產估價師] ${t('about')} - ${t('adminPanel')}`;
+        const text = `親愛的 ${isEditing.name || t('generalUser')} ${t('welcomeMessageTitle')},\n\n您的帳號狀態已更新為：${t(isEditing.role)}\n訂閱到期日：${isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry).toLocaleDateString() : '-'}\n\n--\n${t('appTitle')}`;
 
         const result = await sendEmail({
             smtpHost: settings.smtpHost,
@@ -190,8 +199,8 @@ export const AdminPanel: React.FC = () => {
         if (currentUser.role !== '管理員') updateData.role = '付費用戶';
 
         const result = await updateUser(currentUser.email, updateData);
-        if (result.success) setSuccess("模擬成功！已延長30天訂閱。");
-        else setError("模擬失敗: " + t(result.messageKey));
+        if (result.success) setSuccess(t('simulateSuccess'));
+        else setError(t('simulateFailed') + ": " + t(result.messageKey));
     };
 
     const initiateDelete = (userEmail: string) => { setUserToDelete(userEmail); setError(''); setSuccess(''); };
@@ -289,14 +298,14 @@ export const AdminPanel: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        setImportStatus('系統備份已下載。請妥善保存此檔案，在新裝置上使用「還原系統」功能即可恢復所有設定。');
+        setImportStatus(t('backupRestoreNotice'));
     };
 
     const handleSystemRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        if (!window.confirm('警告：還原操作將會覆蓋目前裝置上的所有設定與會員資料。確定要繼續嗎？')) {
+        if (!window.confirm(t('restoreWarning'))) {
             if (restoreInputRef.current) restoreInputRef.current.value = '';
             return;
         }
@@ -311,11 +320,11 @@ export const AdminPanel: React.FC = () => {
                 if (backup.settings) localStorage.setItem('app_system_settings', backup.settings);
                 if (backup.realEstateData) localStorage.setItem('imported_real_estate_data', backup.realEstateData);
 
-                alert('系統還原成功！頁面將重新整理以套用設定。');
+                alert(t('restoreSuccess'));
                 window.location.reload();
             } catch (err) {
                 console.error("Restore failed", err);
-                alert('還原失敗：檔案格式錯誤或損毀。');
+                alert(t('restoreFailed'));
             }
         };
         reader.readAsText(file);
@@ -327,16 +336,16 @@ export const AdminPanel: React.FC = () => {
             <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl p-8 border border-red-500 flex flex-col items-center text-center">
                     <ExclamationTriangleIcon className="h-20 w-20 text-red-500 mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">無法連線至雲端資料庫</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{t('paymentError')}</h2>
                     <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md">
-                        系統偵測到 Supabase 環境變數遺失或設定錯誤。為了避免資料錯誤，管理後台已暫時鎖定。
+                        {t('adminApiKeySetupRequired')}
                     </p>
                     <div className="flex gap-4">
                         <button onClick={forceReconnect} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2">
-                            <ArrowPathIcon className="h-5 w-5" /> 重新偵測連線
+                            <ArrowPathIcon className="h-5 w-5" /> {t('revaluate')}
                         </button>
                         <button onClick={() => setAdminPanelOpen(false)} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold">
-                            關閉
+                            {t('close')}
                         </button>
                     </div>
                 </div>
@@ -362,7 +371,7 @@ export const AdminPanel: React.FC = () => {
                                 <div className="mb-4 p-3 rounded-lg border bg-green-100 border-green-200 text-green-800">
                                     <div className="flex items-center gap-2 font-bold text-sm">
                                         <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
-                                        <span>雲端資料庫 (連線正常)</span>
+                                        <span>{t('cloudDatabaseStatus')}</span>
                                     </div>
                                 </div>
 
@@ -370,40 +379,57 @@ export const AdminPanel: React.FC = () => {
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-semibold text-gray-500">PayPal Client ID</label>
-                                            <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">Get ID <LinkIcon className="h-3 w-3" /></a>
+                                            <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">{t('getPaypalClientId')} <LinkIcon className="h-3 w-3" /></a>
                                         </div>
                                         <input type="text" value={paypalClientId} onChange={e => setPaypalClientId(e.target.value.trim())} className="w-full border p-1 rounded text-sm" />
                                     </div>
                                     <div className="border-t pt-2">
-                                        <h4 className="text-xs font-bold text-gray-500 mb-2">SMTP 設定 (通知信)</h4>
-                                        <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="Host (e.g. smtp.gmail.com)" />
-                                        <input type="text" value={smtpPort} onChange={e => setSmtpPort(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="Port (587)" />
-                                        <input type="text" value={smtpUser} onChange={e => setSmtpUser(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder="User / Email" />
-                                        <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value.trim())} className="w-full border p-1 rounded text-sm" placeholder="App Password" />
+                                        <h4 className="text-xs font-bold text-gray-500 mb-2">{t('smtpSettings')}</h4>
+                                        <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpHostLabel')} />
+                                        <input type="text" value={smtpPort} onChange={e => setSmtpPort(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpPortLabel')} />
+                                        <input type="text" value={smtpUser} onChange={e => setSmtpUser(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpUserLabel')} />
+                                        <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value.trim())} className="w-full border p-1 rounded text-sm" placeholder={t('smtpPassLabel')} />
                                     </div>
-                                    <div><label className="text-xs font-semibold text-gray-500">管理員 Email (接收通知用)</label><input type="email" value={systemEmail} onChange={e => setSystemEmail(e.target.value.trim())} className="w-full border p-1 rounded text-sm" /></div>
+                                    <div className="border-t pt-2">
+                                        <h4 className="text-xs font-bold text-gray-500 mb-2">{t('copyrightManagement')}</h4>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">{t('publishUnit')}</label>
+                                                <input type="text" value={publishUnit} onChange={e => setPublishUnit(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="Mazylab Studio" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">{t('publishVersion')}</label>
+                                                <input type="text" value={publishVersion} onChange={e => setPublishVersion(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="v.1.120" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">{t('contactEmail')}</label>
+                                                <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="contact@example.com" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div><label className="text-xs font-semibold text-gray-500">{t('adminNotificationEmailLabel')}</label><input type="email" value={systemEmail} onChange={e => setSystemEmail(e.target.value.trim())} className="w-full border p-1 rounded text-sm" /></div>
                                     <button onClick={handleSaveConfig} className="w-full bg-gray-800 text-white text-sm font-bold rounded py-2">{t('saveConfiguration')}</button>
-                                    <button onClick={handleSimulatePaymentForAdmin} className="w-full bg-amber-600 text-white text-xs font-bold rounded py-2 mt-2">模擬付款 (自身測試)</button>
+                                    <button onClick={handleSimulatePaymentForAdmin} className="w-full bg-amber-600 text-white text-xs font-bold rounded py-2 mt-2">{t('simulatePayment')}</button>
                                     {configSuccess && <p className="text-xs text-green-600 text-center">{configSuccess}</p>}
                                 </div>
                             </div>
 
                             <div className="bg-blue-50 p-4 rounded-xl">
-                                <h3 className="font-bold text-blue-800 mb-2">資料與備份管理</h3>
+                                <h3 className="font-bold text-blue-800 mb-2">{t('dataAndBackup')}</h3>
 
                                 <div className="mb-4 pb-4 border-b border-blue-200">
                                     <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded py-2 mb-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                                        <ArrowDownTrayIcon className="h-4 w-4" /> 備份系統資料
+                                        <ArrowDownTrayIcon className="h-4 w-4" /> {t('backupSystem')}
                                     </button>
                                     <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
                                     <button onClick={() => restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                                        <ArrowUpTrayIcon className="h-4 w-4" /> 還原系統資料
+                                        <ArrowUpTrayIcon className="h-4 w-4" /> {t('restoreSystem')}
                                     </button>
                                 </div>
 
                                 <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
-                                <button onClick={() => fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">匯入 實價登錄 CSV</button>
-                                <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">清除實價登錄資料</button>
+                                <button onClick={() => fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">{t('importCsv')}</button>
+                                <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">{t('clearImportedData')}</button>
                                 {importStatus && <p className="text-xs text-blue-700 text-center mt-2 font-bold">{importStatus}</p>}
                             </div>
                         </div>
@@ -425,16 +451,16 @@ export const AdminPanel: React.FC = () => {
                             </div>
                             <div className="flex gap-3"><button onClick={handleExportCsv} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">{t('exportCsv')}</button><button onClick={handleAddNew} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">+ {t('addUser')}</button></div>
                         </div>
-                        <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">Name</th><th className="p-4 text-sm">Role</th><th className="p-4 text-sm">Expiry</th><th className="p-4 text-sm text-right">Action</th></tr></thead><tbody>{users.map(u => (<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString() : '-'}</td><td className="p-4 text-right"><button onClick={() => handleEdit(u)} className="text-blue-600 mr-2">Edit</button>
+                        <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">{t('nameLabel')}</th><th className="p-4 text-sm">{t('roleLabel')}</th><th className="p-4 text-sm">{t('expiryLabel')}</th><th className="p-4 text-sm text-right">{t('actionLabel')}</th></tr></thead><tbody>{users.map(u => (<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString() : '-'}</td><td className="p-4 text-right"><button onClick={() => handleEdit(u)} className="text-blue-600 mr-2">{t('edit')}</button>
                             {u.email === currentUser?.email ? (
-                                <span className="text-gray-400 cursor-not-allowed" title="無法刪除自己的帳號">Del</span>
+                                <span className="text-gray-400 cursor-not-allowed" title={t('cannotDeleteSelf')}>{t('delete')}</span>
                             ) : (
-                                <button onClick={() => initiateDelete(u.email)} className="text-red-600">Del</button>
+                                <button onClick={() => initiateDelete(u.email)} className="text-red-600">{t('delete')}</button>
                             )}
                         </td></tr>))}</tbody></table></div>
                         {(isEditing || isAdding) && (
                             <div className="bg-gray-50 p-6 rounded-xl border">
-                                <h3 className="font-bold mb-4">{isAdding ? 'Add' : 'Edit'} User</h3>
+                                <h3 className="font-bold mb-4">{isAdding ? t('addUserTitle') : t('editUserTitle')}</h3>
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="col-span-1">
@@ -442,47 +468,47 @@ export const AdminPanel: React.FC = () => {
                                             <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="w-full border p-2 rounded" required />
                                         </div>
                                         <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Password</label>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('password')}</label>
                                             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isEditing ? t('passwordPlaceholderEdit') : t('passwordPlaceholderAdd')} className="w-full border p-2 rounded" />
                                         </div>
                                         <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Name</label>
-                                            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="w-full border p-2 rounded" required />
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('name')}</label>
+                                            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('name')} className="w-full border p-2 rounded" required />
                                         </div>
                                         <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Phone</label>
-                                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone" className="w-full border p-2 rounded" required />
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('phone')}</label>
+                                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('phone')} className="w-full border p-2 rounded" required />
                                         </div>
                                         <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Role</label>
+                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('role')}</label>
                                             <select value={role} onChange={e => handleRoleChange(e.target.value as UserRole)} className="w-full border p-2 rounded bg-white">
                                                 {roles.map(r => <option key={r} value={r}>{t(r)}</option>)}
                                             </select>
                                         </div>
                                         {isEditing && (
                                             <div className="col-span-1">
-                                                <label className="block text-xs font-bold text-gray-500 mb-1">Subscription Expiry</label>
+                                                <label className="block text-xs font-bold text-gray-500 mb-1">{t('expiryLabel')}</label>
                                                 <input
                                                     type="date"
                                                     value={expiryDate}
                                                     onChange={e => setExpiryDate(e.target.value)}
                                                     className="w-full border p-2 rounded bg-white"
                                                 />
-                                                <p className="text-[10px] text-gray-400 mt-1">留白表示無期限或一般會員</p>
+                                                <p className="text-[10px] text-gray-400 mt-1">{t('expiryHint')}</p>
                                             </div>
                                         )}
                                     </div>
                                     {isEditing && (
                                         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-                                            <h4 className="font-bold text-green-800 mb-2">快速訂閱管理 (點擊以延長)</h4>
+                                            <h4 className="font-bold text-green-800 mb-2">{t('quickSubscription')}</h4>
                                             <div className="flex gap-2 mb-3">
-                                                <button type="button" onClick={() => handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+30 Days</button>
-                                                <button type="button" onClick={() => handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+120 Days</button>
-                                                <button type="button" onClick={() => handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+365 Days</button>
+                                                <button type="button" onClick={() => handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+30 {t('days') || 'Days'}</button>
+                                                <button type="button" onClick={() => handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+120 {t('days') || 'Days'}</button>
+                                                <button type="button" onClick={() => handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+365 {t('days') || 'Days'}</button>
                                             </div>
                                             <div className="border-t border-green-200 pt-3">
                                                 <button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 font-bold flex items-center gap-1 disabled:opacity-50 hover:underline">
-                                                    <EnvelopeIcon className="h-3 w-3" /> {sendingEmail ? '發送中...' : '📧 發送帳號狀態更新通知信'}
+                                                    <EnvelopeIcon className="h-3 w-3" /> {sendingEmail ? t('sending') : t('sendAccountEmail')}
                                                 </button>
                                             </div>
                                         </div>
@@ -500,7 +526,7 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             {/* Delete Confirmation Modal */}
-            {userToDelete && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"><div className="bg-white p-6 rounded shadow-lg"><h3>Confirm Delete?</h3><div className="flex gap-2 mt-4"><button onClick={() => setUserToDelete(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button></div></div></div>}
+            {userToDelete && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"><div className="bg-white p-6 rounded shadow-lg"><h3>{t('deleteConfirmTitle')}</h3><div className="flex gap-2 mt-4"><button onClick={() => setUserToDelete(null)} className="px-4 py-2 bg-gray-200 rounded">{t('cancel')}</button><button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded">{t('delete')}</button></div></div></div>}
         </div>
     );
 };

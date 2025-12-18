@@ -25,6 +25,9 @@ export interface Settings {
   smtpUser: string;
   smtpPass: string;
   autoUpdateCacheOnLogin: boolean;
+  publishUnit: string;
+  publishVersion: string;
+  contactEmail: string;
 }
 
 const defaultSettings: Settings = {
@@ -41,6 +44,9 @@ const defaultSettings: Settings = {
   smtpUser: '',
   smtpPass: '',
   autoUpdateCacheOnLogin: true,
+  publishUnit: '',
+  publishVersion: '',
+  contactEmail: '',
 };
 
 // Initialize with imported data
@@ -53,7 +59,7 @@ const defaultTranslations: Record<Language, any> = {
 
 const SYSTEM_KEYS: (keyof Settings)[] = [
   'paypalClientId', 'publicApiKey', 'allowPublicApiKey', 'systemEmail',
-  'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass'
+  'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'publishUnit', 'publishVersion', 'contactEmail'
 ];
 
 interface SettingsContextType {
@@ -84,6 +90,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (system.smtp_port) merged.smtpPort = system.smtp_port;
     if (system.smtp_user) merged.smtpUser = system.smtp_user;
     if (system.smtp_pass) merged.smtpPass = system.smtp_pass;
+    if (system.publish_unit) merged.publishUnit = system.publish_unit;
+    if (system.publish_version) merged.publishVersion = system.publish_version;
+    if (system.contact_email) merged.contactEmail = system.contact_email;
     return merged;
   };
 
@@ -212,6 +221,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         if (sanitized.smtpPort !== undefined) dbPayload.smtp_port = sanitized.smtpPort;
         if (sanitized.smtpUser !== undefined) dbPayload.smtp_user = sanitized.smtpUser;
         if (sanitized.smtpPass !== undefined) dbPayload.smtp_pass = sanitized.smtpPass;
+        if (sanitized.publishUnit !== undefined) dbPayload.publish_unit = sanitized.publishUnit;
+        if (sanitized.publishVersion !== undefined) dbPayload.publish_version = sanitized.publishVersion;
+        if (sanitized.contactEmail !== undefined) dbPayload.contact_email = sanitized.contactEmail;
 
         dbPayload.updated_at = new Date().toISOString();
 

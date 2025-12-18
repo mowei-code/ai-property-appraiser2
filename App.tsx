@@ -638,7 +638,7 @@ const AppContent: React.FC = () => {
               </button>
             </div>
             <p style={{ fontSize: '10px' }} className="mt-6 text-slate-400 dark:text-slate-500">
-              &copy; Mazylab studio {APP_VERSION} • {APP_RELEASE_DATE}
+              &copy; <span className="underline">{settings.publishUnit || 'Mazylab studio'}</span> {settings.publishVersion || APP_VERSION} &bull; {new Date().toISOString().split('T')[0]}
             </p>
           </div>
         </main>
