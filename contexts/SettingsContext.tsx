@@ -95,19 +95,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       const storageKey = currentUser ? `user_settings_${currentUser.email}` : null;
 
       try {
-        // Load language globally first
-        const savedLang = localStorage.getItem('app_language') as Language;
-        if (savedLang && utilIsLanguage(savedLang)) {
-          baseSettings.language = savedLang;
-        }
-
-        // Load user specific settings
+        // Load user specific settings first
         if (storageKey) {
           const userStored = localStorage.getItem(storageKey);
           if (userStored) {
             const parsed = JSON.parse(userStored);
             baseSettings = { ...baseSettings, ...parsed };
           }
+        }
+
+        // Apply global language choice LAST (to prioritize it over user-specific stale settings)
+        const savedLang = localStorage.getItem('app_language') as Language;
+        if (savedLang && utilIsLanguage(savedLang)) {
+          baseSettings.language = savedLang;
         }
       } catch (e) {
         console.error("Failed to load local settings:", e);
