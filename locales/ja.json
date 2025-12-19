@@ -32,6 +32,8 @@
   "customFloor": "カスタム階数（任意）",
   "enterFloorPlaceholder": "例：8階 / 15階",
   "customInputNote": "このセクションに入力すると、AIは提供された値を優先して評価します。空欄の場合は、周辺の市場価格に基づいて評価します。",
+  "customValuationLabel": "具体的な評価ニーズまたはシナリオを入力してください",
+  "customValuationPlaceholder": "例：ここをシェアオフィスの拠点とするポテンシャルや、リノベーション後の予想される価値向上レベルなどを評価してください...",
   "aiValuationButton": "AIスマート評価",
   "valuating": "評価中...",
   "valuating_init": "評価プロセスを開始しています...",

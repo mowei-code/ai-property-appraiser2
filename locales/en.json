@@ -28,6 +28,8 @@
   "customFloor": "Custom Floor (Optional)",
   "enterFloorPlaceholder": "e.g., 8F / 15F",
   "customInputNote": "If you fill this section, the AI will prioritize your provided values for estimation. If left blank, it will estimate based on nearby market prices.",
+  "customValuationLabel": "Please enter your specific valuation needs or scenario",
+  "customValuationPlaceholder": "Example: Please evaluate the potential for a co-working space here, or the expected value appreciation after renovation...",
   "aiValuationButton": "AI Smart Valuation",
   "valuating": "Valuating...",
   "valuating_init": "Initializing valuation process...",

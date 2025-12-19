@@ -32,6 +32,8 @@
   "customFloor": "自订楼层 (选填)",
   "enterFloorPlaceholder": "例如: 8楼 / 15楼",
   "customInputNote": "若填写此区块，AI 将优先使用您提供的数值进行估算。若留白，则会依据附近行情自动估算。",
+  "customValuationLabel": "请输入您的具体估值需求或情景",
+  "customValuationPlaceholder": "例如：请评估此处作为共享办公室的潜力，或是重新装修后的预期增值...",
   "aiValuationButton": "AI智慧为您估价参考",
   "valuating": "估价中...",
   "valuating_init": "正在启动估价程序...",
