@@ -417,6 +417,41 @@ export const SettingsModal: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Global API Key (Admin Only) */}
+                            {currentUser?.role === '管理員' && (
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="allowPublicApiKey"
+                                            name="allowPublicApiKey"
+                                            checked={localSettings.allowPublicApiKey}
+                                            onChange={handleChange}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <label htmlFor="allowPublicApiKey" className="text-sm font-bold text-blue-800 dark:text-blue-200">
+                                            {t('enableGlobalApiKey')}
+                                        </label>
+                                    </div>
+                                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                                        {t('globalApiKeyNotice')}
+                                    </p>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                                            {t('globalGeminiApiKey')}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            name="publicApiKey"
+                                            value={localSettings.publicApiKey}
+                                            onChange={handleChange}
+                                            placeholder={t('enterGlobalApiKey')}
+                                            className="w-full p-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-blue-500 focus:border-blue-500 font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Theme */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('theme')}</label>

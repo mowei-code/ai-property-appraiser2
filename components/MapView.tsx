@@ -182,8 +182,14 @@ export const MapView: React.FC<MapViewProps> = ({ property, properties, filters,
 
     // Invalidate map size to fix rendering issues when the container becomes visible after animation
     setTimeout(() => {
-      map.invalidateSize();
-    }, 150);
+      if (map) {
+        map.invalidateSize();
+        // If there's a selected property, re-center it after invalidating size to ensure it's truly centered
+        if (property && property.latitude && property.longitude) {
+          map.panTo([property.latitude, property.longitude]);
+        }
+      }
+    }, 450);
 
     // --- 1. Cleanup Phase: Remove all DYNAMIC elements from the previous render ---
     if (mainMarkerRef.current) {

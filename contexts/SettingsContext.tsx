@@ -86,6 +86,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const merged = { ...current };
     if (system.paypal_client_id) merged.paypalClientId = system.paypal_client_id;
     if (system.system_email) merged.systemEmail = system.system_email;
+    if (system.public_api_key) merged.publicApiKey = system.public_api_key;
+    if (system.allow_public_api_key !== undefined) merged.allowPublicApiKey = system.allow_public_api_key;
     if (system.smtp_host) merged.smtpHost = system.smtp_host;
     if (system.smtp_port) merged.smtpPort = system.smtp_port;
     if (system.smtp_user) merged.smtpUser = system.smtp_user;
@@ -216,6 +218,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (hasSystemUpdates && currentUser?.role === '管理員') {
         const dbPayload: any = {};
         if (sanitized.paypalClientId !== undefined) dbPayload.paypal_client_id = sanitized.paypalClientId;
+        if (sanitized.publicApiKey !== undefined) dbPayload.public_api_key = sanitized.publicApiKey;
+        if (sanitized.allowPublicApiKey !== undefined) dbPayload.allow_public_api_key = sanitized.allowPublicApiKey;
         if (sanitized.systemEmail !== undefined) dbPayload.system_email = sanitized.systemEmail;
         if (sanitized.smtpHost !== undefined) dbPayload.smtp_host = sanitized.smtpHost;
         if (sanitized.smtpPort !== undefined) dbPayload.smtp_port = sanitized.smtpPort;
@@ -249,15 +253,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const getApiKey = (): string | null => {
-    if (currentUser?.role === '管理員') {
-      if (settings.apiKey) return settings.apiKey;
-      if (settings.publicApiKey) return settings.publicApiKey;
-      return null;
-    }
+    // 1. Prioritize personal API Key
     if (settings.apiKey) return settings.apiKey;
+
+    // 2. Use Global API Key only if enabled and present
     if (settings.allowPublicApiKey && settings.publicApiKey) {
       return settings.publicApiKey;
     }
+
     return null;
   };
 

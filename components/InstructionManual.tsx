@@ -50,13 +50,16 @@ export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, on
     content += `${li}${b}${t('regionalDevelopmentPotential')}:${b} ${t('manualBasisDesc5')}\n`;
     content += `${li}${b}${t('foreclosureInfo')}:${b} ${t('manualBasisDesc6')}\n`;
     content += `${li}${b}${t('rentalYieldAnalysis')}:${b} ${t('manualBasisDesc7')}\n`;
-    content += `${li}${b}${t('bankAppraisalModel')}:${b} ${t('manualBasisDesc8')}\n${p}`;
+    content += `${li}${b}${t('bankAppraisalModel')}:${b} ${t('manualBasisDesc8')}\n`;
+    content += `${li}${b}${t('urbanRenewalPotential')}:${b} ${t('manualBasisDesc9')}\n`;
+    content += `${li}${b}${t('commercialValue')}:${b} ${t('manualBasisDesc10')}\n`;
+    content += `${li}${b}${t('structureSafety')}:${b} ${t('manualBasisDesc11')}\n`;
+    content += `${li}${b}${t('customValuation')}:${b} ${t('manualBasisDesc12')}\n${p}`;
     content += `${h4}${t('manualMapSearchTitle')}\n${t('manualMapSearchBody')}\n${p}`;
     content += `${h4}${t('manualReportFeatureTitle')}\n${t('manualReportFeatureBody')}\n${p}`;
     content += `${h4}${t('manualScenarioAnalysisTitle')}\n${t('manualScenarioAnalysisBody')}\n${p}`;
     content += `${h4}${t('manualComparisonTitle')}\n${t('manualComparisonBody')}\n${p}`;
     content += `${h2}${t('manualUserRolesTitle')}\n${t('manualUserRolesBody')}\n`;
-    content += `${li}${b}${t('admin')}:${b} ${t('manualRoleAdminDesc')}\n`;
     content += `${li}${b}${t('paidUser')}:${b} ${t('manualRolePaidDesc')}\n`;
     content += `${li}${b}${t('generalUser')}:${b} ${t('manualRoleGeneralDesc')}\n`;
 
@@ -152,6 +155,10 @@ export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, on
               <li><strong>{t('foreclosureInfo')}:</strong> {t('manualBasisDesc6')}</li>
               <li><strong>{t('rentalYieldAnalysis')}:</strong> {t('manualBasisDesc7')}</li>
               <li><strong>{t('bankAppraisalModel')}:</strong> {t('manualBasisDesc8')}</li>
+              <li><strong>{t('urbanRenewalPotential')}:</strong> {t('manualBasisDesc9')}</li>
+              <li><strong>{t('commercialValue')}:</strong> {t('manualBasisDesc10')}</li>
+              <li><strong>{t('structureSafety')}:</strong> {t('manualBasisDesc11')}</li>
+              <li><strong>{t('customValuation')}:</strong> {t('manualBasisDesc12')}</li>
             </ul>
             <h4 className="font-semibold text-gray-800 dark:text-gray-200 mt-3">{t('manualMapSearchTitle')}</h4>
             <p>{t('manualMapSearchBody')}</p>
@@ -166,7 +173,6 @@ export const InstructionManual: React.FC<InstructionManualProps> = ({ isOpen, on
           <Section title={t('manualUserRolesTitle')}>
             <p>{t('manualUserRolesBody')}</p>
             <ul className="list-disc list-inside pl-4 mt-1">
-              <li><strong>{t('admin')}:</strong> {t('manualRoleAdminDesc')}</li>
               <li><strong>{t('paidUser')}:</strong> {t('manualRolePaidDesc')}</li>
               <li><strong>{t('generalUser')}:</strong> {t('manualRoleGeneralDesc')}</li>
             </ul>
