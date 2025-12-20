@@ -53,7 +53,9 @@
       "dist/**/*",
       "electron/**/*",
       "package.json",
-      "server.js"
+      "server.js",
+      "tools/**/*",
+      "docs/**/*"
     ],
     "win": {
       "target": [

@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# User custom backups
+backups/
+backup/
+*.bak
+
+# Environment files
+.env*.local
+!.env.example
+
+# OS files
+Thumbs.db
+Desktop.ini
