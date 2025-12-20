@@ -1,9 +1,12 @@
-
 {
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": false,
@@ -16,8 +19,28 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["."],
-  "exclude": ["node_modules", "dist", "dist_electron", "server.js", "api"]
+  "include": [
+    "src/**/*",
+    "App.tsx",
+    "index.tsx",
+    "supabaseClient.ts",
+    "types.ts",
+    "utils.ts",
+    "constants.ts",
+    "components/**/*",
+    "services/**/*",
+    "contexts/**/*",
+    "api/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist_electron",
+    "server.js",
+    "api"
+  ]
 }

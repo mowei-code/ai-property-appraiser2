@@ -73,24 +73,24 @@ const valuationSchema = {
       }
     },
     foreclosureAnalysis: {
-        type: Type.OBJECT,
-        description: "Provide ONLY when the valuation basis is 'Foreclosure Info'. This section should contain analysis of nearby foreclosure properties, NOT an analysis of the target property as a foreclosure.",
-        properties: {
-            summary: { type: Type.STRING, description: "A summary sentence stating whether nearby foreclosure cases were found (e.g., 'Found 1 recent foreclosure case within 500m.') or not found." },
-            cases: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        address: { type: Type.STRING, description: 'The address of the nearby foreclosed property.' },
-                        auctionPrice: { type: Type.STRING, description: 'The estimated auction price or recent auction result (e.g., Approx. 12M TWD).' },
-                        analysis: { type: Type.STRING, description: 'A brief analysis of this specific foreclosure case and its potential impact on the target property\'s market.' }
-                    },
-                    required: ['address', 'auctionPrice', 'analysis']
-                }
-            }
-        },
-        required: ['summary', 'cases']
+      type: Type.OBJECT,
+      description: "Provide ONLY when the valuation basis is 'Foreclosure Info'. This section should contain analysis of nearby foreclosure properties, NOT an analysis of the target property as a foreclosure.",
+      properties: {
+        summary: { type: Type.STRING, description: "A summary sentence stating whether nearby foreclosure cases were found (e.g., 'Found 1 recent foreclosure case within 500m.') or not found." },
+        cases: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              address: { type: Type.STRING, description: 'The address of the nearby foreclosed property.' },
+              auctionPrice: { type: Type.STRING, description: 'The estimated auction price or recent auction result (e.g., Approx. 12M TWD).' },
+              analysis: { type: Type.STRING, description: 'A brief analysis of this specific foreclosure case and its potential impact on the target property\'s market.' }
+            },
+            required: ['address', 'auctionPrice', 'analysis']
+          }
+        }
+      },
+      required: ['summary', 'cases']
     },
     rentalYieldAnalysisData: {
       type: Type.OBJECT,
@@ -118,32 +118,32 @@ const valuationSchema = {
 };
 
 const getPrompts = (language: Language) => {
-    const prompts = {
-        'zh-TW': {
-            system: '請扮演一位專業的台灣房地產AI估價師。',
-            targetProperty: '目標房產地址',
-            propertyType: '房屋類型',
-            propertyAge: '屋齡',
-            layout: '格局',
-            bedrooms: '房',
-            bathrooms: '衛',
-            floor: '樓層',
-            area: '建物面積',
-            sqm: '平方公尺',
-            ping: '坪',
-            basis: '估價參考基準',
-            customValues: '使用者自訂參考數值 (請優先使用這些數值進行估算)',
-            customRequest: '使用者自訂估價需求',
-            actualPing: '實際坪數',
-            refPrice: '參考單價',
-            refPriceUnit: '萬/坪',
-            notProvided: '未提供',
-            unknown: '未知',
-            nearbyTransactions: '參考的周邊{{count}}筆近期成交資訊',
-            address: '地址',
-            totalPrice: '總價',
-            transactionDate: '交易日期',
-            instructions: `請根據以上所有資訊，提供一份專業的JSON格式估價報告。
+  const prompts = {
+    'zh-TW': {
+      system: '請扮演一位專業的台灣房地產AI估價師。',
+      targetProperty: '目標房產地址',
+      propertyType: '房屋類型',
+      propertyAge: '屋齡',
+      layout: '格局',
+      bedrooms: '房',
+      bathrooms: '衛',
+      floor: '樓層',
+      area: '建物面積',
+      sqm: '平方公尺',
+      ping: '坪',
+      basis: '估價參考基準',
+      customValues: '使用者自訂參考數值 (請優先使用這些數值進行估算)',
+      customRequest: '使用者自訂估價需求',
+      actualPing: '實際坪數',
+      refPrice: '參考單價',
+      refPriceUnit: '萬/坪',
+      notProvided: '未提供',
+      unknown: '未知',
+      nearbyTransactions: '參考的周邊{{count}}筆近期成交資訊',
+      address: '地址',
+      totalPrice: '總價',
+      transactionDate: '交易日期',
+      instructions: `請根據以上所有資訊，提供一份專業的JSON格式估價報告。
 - 估價需考慮地點、屋齡、類型、樓層、坪數、市場趨勢及提供的成交資訊。
 - **價格約束**：您的估價必須合理，且最終的每坪單價應落於所提供參考成交案例的價格區間內或其合理延伸範圍。請避免脫離市場行情的高估或低估。如果參考案例來自鄰近但不同的行政區，請進行適當的價格調整。
 - **極重要**：如果目標房產的詳細資訊（類型、坪數、格局、樓層）為「未知」，請你務必根據地址（例如地址中的「20樓」暗示這是一間公寓大樓的單位）以及周邊成交資訊，來**推斷**此房產最可能的特徵。在推斷坪數時，請參考周邊案例的平均值，並保持謹慎保守的估計。你的估價必須基於這些推斷出的特徵。請務必在回傳的JSON中，填寫 \`inferredDetails\` 欄位，包含你推斷出的 \`type\` (類型), \`sizePing\` (坪數), \`floor\` (樓層), 和 \`layout\` (格局，例如 '2房1衛')。
@@ -157,37 +157,37 @@ const getPrompts = (language: Language) => {
 - **特別注意**：當估價參考基準為 **'自訂估價指令'** 時，請**優先遵循**使用者提供的自訂指令進行分析與估價。將使用者的特定需求（如裝潢增值、特殊設施影響等）納入核心考量。
 - 其他估價基準則**不需要** \`realtorAnalysis\`、\`foreclosureAnalysis\` 或 \`rentalYieldAnalysisData\` 欄位。
 - 輸出語言為繁體中文。`,
-            scenarioSystem: '請扮演一位專業的台灣房地產AI分析師。',
-            scenarioIntro: '我正在評估一個房產，以下是它的基本資料和初步估價結果：',
-            scenarioValuation: 'AI初步估價',
-            scenarioQuestion: '現在，我有一個特定的情境想請您分析，這個情境可能會如何影響房價。請根據您的專業知識提供一段簡潔、專業的分析。\n\n我的情境是：「{{query}}」',
-            scenarioInstructions: '請直接提供分析內容，不需要重複我的問題。輸出語言為繁體中文。'
-        },
-        'zh-CN': {
-            system: '请扮演一位专业的台湾房地产AI估价师。',
-            targetProperty: '目标房产地址',
-            propertyType: '房屋类型',
-            propertyAge: '屋龄',
-            layout: '格局',
-            bedrooms: '房',
-            bathrooms: '卫',
-            floor: '楼层',
-            area: '建物面积',
-            sqm: '平方米',
-            ping: '坪',
-            basis: '估价参考基准',
-            customValues: '使用者自订参考数值 (请优先使用这些数值进行估算)',
-            customRequest: '使用者自订估价需求',
-            actualPing: '实际坪数',
-            refPrice: '参考单价',
-            refPriceUnit: '万/坪',
-            notProvided: '未提供',
-            unknown: '未知',
-            nearbyTransactions: '参考的周边{{count}}笔近期成交资讯',
-            address: '地址',
-            totalPrice: '总价',
-            transactionDate: '交易日期',
-            instructions: `请根据以上所有资讯，提供一份专业的JSON格式估价报告。
+      scenarioSystem: '請扮演一位專業的台灣房地產AI分析師。',
+      scenarioIntro: '我正在評估一個房產，以下是它的基本資料和初步估價結果：',
+      scenarioValuation: 'AI初步估價',
+      scenarioQuestion: '現在，我有一個特定的情境想請您分析，這個情境可能會如何影響房價。請根據您的專業知識提供一段簡潔、專業的分析。\n\n我的情境是：「{{query}}」',
+      scenarioInstructions: '請直接提供分析內容，不需要重複我的問題。輸出語言為繁體中文。'
+    },
+    'zh-CN': {
+      system: '请扮演一位专业的台湾房地产AI估价师。',
+      targetProperty: '目标房产地址',
+      propertyType: '房屋类型',
+      propertyAge: '屋龄',
+      layout: '格局',
+      bedrooms: '房',
+      bathrooms: '卫',
+      floor: '楼层',
+      area: '建物面积',
+      sqm: '平方米',
+      ping: '坪',
+      basis: '估价参考基准',
+      customValues: '使用者自订参考数值 (请优先使用这些数值进行估算)',
+      customRequest: '使用者自订估价需求',
+      actualPing: '实际坪数',
+      refPrice: '参考单价',
+      refPriceUnit: '万/坪',
+      notProvided: '未提供',
+      unknown: '未知',
+      nearbyTransactions: '参考的周边{{count}}笔近期成交资讯',
+      address: '地址',
+      totalPrice: '总价',
+      transactionDate: '交易日期',
+      instructions: `请根据以上所有资讯，提供一份专业的JSON格式估价报告。
 - 估价需考虑地点、屋龄、类型、楼层、坪数、市场趋势及提供的成交资讯。
 - **价格约束**：您的估价必须合理，且最终的每坪单价应落于所提供参考成交案例的价格区间内或其合理延伸范围。请避免脱离市场行情的高估或低估。如果参考案例来自邻近但不同的行政区，请进行适当的价格调整。
 - **极重要**：如果目标房产的详细资讯（类型、坪数、格局、楼层）为「未知」，请你务必根据地址（例如地址中的「20楼」暗示这是一间公寓大楼的单位）以及周边成交资讯，来**推断**此房产最可能的特征。在推断坪数时，请参考周边案例的平均值，并保持谨慎保守的估计。你的估价必须基于这些推断出的特征。请务务必在回传的JSON中，填写 \`inferredDetails\` 字段，包含你推断出的 \`type\` (类型), \`sizePing\` (坪数), \`floor\` (楼层), 和 \`layout\` (格局，例如 '2房1卫')。
@@ -201,37 +201,37 @@ const getPrompts = (language: Language) => {
 - **特别注意**：当估价参考基准为 **'自订估价指令'** 时，请**优先遵循**使用者提供的自订指令进行分析与估价。将使用者的特定需求（如装潢增值、特殊设施影响等）纳入核心考量。
 - 其他估价基准则**不需要** \`realtorAnalysis\`、\`foreclosureAnalysis\` 或 \`rentalYieldAnalysisData\` 字段。
 - 输出语言为简体中文。`,
-            scenarioSystem: '请扮演一位专业的台湾房地产AI分析师。',
-            scenarioIntro: '我正在评估一个房产，以下是它的基本资料和初步估价结果：',
-            scenarioValuation: 'AI初步估价',
-            scenarioQuestion: '现在，我有一个特定的情境想请您分析，这个情境可能会如何影响房价。请根据您的专业知识提供一段简洁、专业的分析。\n\n我的情境是：「{{query}}」',
-            scenarioInstructions: '请直接提供分析内容，不需要重复我的问题。输出语言为简体中文。'
-        },
-        'en': {
-            system: 'Act as a professional Taiwanese real estate AI appraiser.',
-            targetProperty: 'Target Property Address',
-            propertyType: 'Property Type',
-            propertyAge: 'Property Age',
-            layout: 'Layout',
-            bedrooms: 'Bedrooms',
-            bathrooms: 'Bathrooms',
-            floor: 'Floor',
-            area: 'Building Area',
-            sqm: 'sqm',
-            ping: 'ping',
-            basis: 'Valuation Basis',
-            customValues: 'User-defined Reference Values (Prioritize these for estimation)',
-            customRequest: 'User Custom Valuation Request',
-            actualPing: 'Actual Size (Ping)',
-            refPrice: 'Reference Price',
-            refPriceUnit: 'x10k TWD/Ping',
-            notProvided: 'Not provided',
-            unknown: 'Unknown',
-            nearbyTransactions: 'Reference of {{count}} nearby recent transactions',
-            address: 'Address',
-            totalPrice: 'Total Price',
-            transactionDate: 'Transaction Date',
-            instructions: `Based on all the information above, please provide a professional valuation report in JSON format.
+      scenarioSystem: '请扮演一位专业的台湾房地产AI分析师。',
+      scenarioIntro: '我正在评估一个房产，以下是它的基本资料和初步估价结果：',
+      scenarioValuation: 'AI初步估价',
+      scenarioQuestion: '现在，我有一个特定的情境想请您分析，这个情境可能会如何影响房价。请根据您的专业知识提供一段简洁、专业的分析。\n\n我的情境是：「{{query}}」',
+      scenarioInstructions: '请直接提供分析内容，不需要重复我的问题。输出语言为简体中文。'
+    },
+    'en': {
+      system: 'Act as a professional Taiwanese real estate AI appraiser.',
+      targetProperty: 'Target Property Address',
+      propertyType: 'Property Type',
+      propertyAge: 'Property Age',
+      layout: 'Layout',
+      bedrooms: 'Bedrooms',
+      bathrooms: 'Bathrooms',
+      floor: 'Floor',
+      area: 'Building Area',
+      sqm: 'sqm',
+      ping: 'ping',
+      basis: 'Valuation Basis',
+      customValues: 'User-defined Reference Values (Prioritize these for estimation)',
+      customRequest: 'User Custom Valuation Request',
+      actualPing: 'Actual Size (Ping)',
+      refPrice: 'Reference Price',
+      refPriceUnit: 'x10k TWD/Ping',
+      notProvided: 'Not provided',
+      unknown: 'Unknown',
+      nearbyTransactions: 'Reference of {{count}} nearby recent transactions',
+      address: 'Address',
+      totalPrice: 'Total Price',
+      transactionDate: 'Transaction Date',
+      instructions: `Based on all the information above, please provide a professional valuation report in JSON format.
 - The valuation must consider location, age, type, floor, size, market trends, and the provided transaction data.
 - **Price Constraint**: Your valuation must be reasonable. The final unit price per ping should fall within or be a reasonable extension of the price range of the provided reference transactions. Avoid over- or under-valuation that deviates from market conditions. If reference cases are from a nearby but different administrative district, make appropriate price adjustments.
 - **CRITICAL**: If the target property's details (type, size, layout, floor) are "Unknown," you MUST infer its most likely characteristics based on the address (e.g., '20F' in the address implies it's a unit in an apartment building) and the provided nearby transaction data. When inferring the size (ping), please refer to the average size of nearby cases and maintain a cautious, conservative estimate. Your valuation must be based on these inferred characteristics. You MUST populate the \`inferredDetails\` field in the returned JSON with your inferred \`type\`, \`sizePing\`, \`floor\`, and \`layout\` (e.g., '2BR 1BA').
@@ -245,37 +245,37 @@ const getPrompts = (language: Language) => {
 - **SPECIAL NOTE**: When the valuation basis is **'Custom Valuation'**, please **prioritize** the user's custom request/instructions for your analysis and valuation. Incorporate their specific needs (e.g., renovation value, special facility impact) as core considerations.
 - For all other valuation bases, the \`realtorAnalysis\`, \`foreclosureAnalysis\`, and \`rentalYieldAnalysisData\` fields are **NOT required**.
 - The output language must be English.`,
-            scenarioSystem: 'Act as a professional Taiwanese real estate AI analyst.',
-            scenarioIntro: 'I am evaluating a property. Here is its basic information and initial valuation:',
-            scenarioValuation: 'AI Initial Valuation',
-            scenarioQuestion: 'Now, I have a specific scenario I would like you to analyze regarding how it might affect the property price. Please provide a concise, professional analysis based on your expertise.\n\nMy scenario is: "{{query}}"',
-            scenarioInstructions: 'Please provide the analysis directly without repeating my question. The output language must be English.'
-        },
-        'ja': {
-            system: 'プロの台湾不動産AI鑑定士として行動してください。',
-            targetProperty: '対象物件の住所',
-            propertyType: '物件種別',
-            propertyAge: '築年数',
-            layout: '間取り',
-            bedrooms: 'LDK',
-            bathrooms: '浴室',
-            floor: '階数',
-            area: '建物面積',
-            sqm: '平方メートル',
-            ping: '坪',
-            basis: '評価基準',
-            customValues: 'ユーザー指定の参考値（これらを優先して評価してください）',
-            customRequest: 'ユーザー指定の評価要望',
-            actualPing: '実際の坪数',
-            refPrice: '参考単価',
-            refPriceUnit: '万円/坪',
-            notProvided: '未提供',
-            unknown: '不明',
-            nearbyTransactions: '参考となる周辺の最近の取引{{count}}件',
-            address: '住所',
-            totalPrice: '総価格',
-            transactionDate: '取引日',
-            instructions: `上記のすべての情報に基づき、専門的な評価レポートをJSON形式で提供してください。
+      scenarioSystem: 'Act as a professional Taiwanese real estate AI analyst.',
+      scenarioIntro: 'I am evaluating a property. Here is its basic information and initial valuation:',
+      scenarioValuation: 'AI Initial Valuation',
+      scenarioQuestion: 'Now, I have a specific scenario I would like you to analyze regarding how it might affect the property price. Please provide a concise, professional analysis based on your expertise.\n\nMy scenario is: "{{query}}"',
+      scenarioInstructions: 'Please provide the analysis directly without repeating my question. The output language must be English.'
+    },
+    'ja': {
+      system: 'プロの台湾不動産AI鑑定士として行動してください。',
+      targetProperty: '対象物件の住所',
+      propertyType: '物件種別',
+      propertyAge: '築年数',
+      layout: '間取り',
+      bedrooms: 'LDK',
+      bathrooms: '浴室',
+      floor: '階数',
+      area: '建物面積',
+      sqm: '平方メートル',
+      ping: '坪',
+      basis: '評価基準',
+      customValues: 'ユーザー指定の参考値（これらを優先して評価してください）',
+      customRequest: 'ユーザー指定の評価要望',
+      actualPing: '実際の坪数',
+      refPrice: '参考単価',
+      refPriceUnit: '万円/坪',
+      notProvided: '未提供',
+      unknown: '不明',
+      nearbyTransactions: '参考となる周辺の最近の取引{{count}}件',
+      address: '住所',
+      totalPrice: '総価格',
+      transactionDate: '取引日',
+      instructions: `上記のすべての情報に基づき、専門的な評価レポートをJSON形式で提供してください。
 - 評価には、立地、築年数、種別、階数、面積、市場動向、および提供された取引情報を考慮する必要があります。
 - **価格制約**：評価は合理的でなければなりません。最終的な坪単価は、提供された参考取引事例の価格範囲内、またはその合理的な延長線上にあるべきです。市況からかけ離れた過大評価や過小評価は避けてください。参考事例が近隣の異なる行政区からのものである場合は、適切な価格調整を行ってください。
 - **最重要**：対象物件の詳細情報（種別、面積、間取り、階数）が「不明」の場合、住所（例：住所の「20階」はマンションの一部屋であることを示唆）と周辺の取引情報に基づいて、物件の最も可能性の高い特徴を**推測**しなければなりません。坪数を推測する際は、周辺事例の平均値を参考にし、慎重かつ保守的な見積もりを維持してください。評価はこれらの推測された特徴に基づいて行う必要があります。返されるJSONには、推測した\`type\`（種別）、\`sizePing\`（坪数）、\`floor\`（階数）、および\`layout\`（間取り、例：「2LDK」）を含む\`inferredDetails\`フィールドを必ず入力してください。
@@ -289,14 +289,14 @@ const getPrompts = (language: Language) => {
 - **特記事項**：評価基準が **'カスタム評価リクエスト'** の場合、ユーザーが提供したカスタム指示を**優先的に**遵守して分析と評価を行ってください。ユーザーの特定のニーズ（リフォームによる価値向上、特殊施設の影響など）を中核的な考慮事項として組み込んでください。
 - その他の評価基準の場合は、\`realtorAnalysis\`、\`foreclosureAnalysis\`、および \`rentalYieldAnalysisData\` フィールドは**不要**です。
 - 出力言語は日本語でなければなりません。`,
-            scenarioSystem: 'プロの台湾不動産AIアナリストとして行動してください。',
-            scenarioIntro: 'ある物件を評価しています。以下がその基本情報と初期評価です：',
-            scenarioValuation: 'AIによる初期評価',
-            scenarioQuestion: 'さて、特定のシナリオが物件価格にどのように影響するかについて分析していただきたいです。専門知識に基づき、簡潔で専門的な分析を提供してください。\n\n私のシナリオは：「{{query}}」',
-            scenarioInstructions: '私の質問を繰り返さず、分析内容を直接提供してください。出力言語は日本語でなければなりません。'
-        }
-    };
-    return prompts[language] || prompts['zh-TW'];
+      scenarioSystem: 'プロの台湾不動産AIアナリストとして行動してください。',
+      scenarioIntro: 'ある物件を評価しています。以下がその基本情報と初期評価です：',
+      scenarioValuation: 'AIによる初期評価',
+      scenarioQuestion: 'さて、特定のシナリオが物件価格にどのように影響するかについて分析していただきたいです。専門知識に基づき、簡潔で専門的な分析を提供してください。\n\n私のシナリオは：「{{query}}」',
+      scenarioInstructions: '私の質問を繰り返さず、分析内容を直接提供してください。出力言語は日本語でなければなりません。'
+    }
+  };
+  return prompts[language] || prompts['zh-TW'];
 };
 
 
@@ -309,11 +309,11 @@ export const getValuation = async (
   referenceKey?: string, // Pass the raw key (e.g., 'urbanRenewalPotential') for more reliable switching
   customInputs?: { size?: number; pricePerPing?: number; floor?: string; customRequest?: string }
 ): Promise<ValuationReport> => {
-    
+
   const p = getPrompts(language);
 
   // Use referenceKey if provided (it's the internal key like 'customValuation'), otherwise fallback to the localized string 'reference'
-  const effectiveBasis = referenceKey || reference; 
+  const effectiveBasis = referenceKey || reference;
   // However, to match the prompt logic properly which checks for localized strings in some cases (old logic) 
   // but we added English-like keys in the prompt special notes instructions.
   // Actually, the prompt instructions check for:
@@ -350,15 +350,15 @@ export const getValuation = async (
 
     ${p.nearbyTransactions.replace('{{count}}', String(nearbyTransactions.length))}:
     ${nearbyTransactions.map(prop => {
-      const details: string[] = [];
-      if (prop.address) details.push(`${p.address}: ${prop.address}`);
-      if (prop.price) details.push(`${p.totalPrice}: ${prop.price.toLocaleString()} TWD`);
-      if (prop.size) details.push(`${p.area}: ${(prop.size / 3.30579).toFixed(2)} ${p.ping}`);
-      if (prop.type) details.push(`${p.propertyType}: ${prop.type}`);
-      if (prop.yearBuilt) details.push(`${p.propertyAge}: ${new Date().getFullYear() - prop.yearBuilt}年`);
-      if (prop.transactionDate) details.push(`${p.transactionDate}: ${prop.transactionDate}`);
-      return `- ${details.join(', ')}`;
-    }).join('\n')}
+    const details: string[] = [];
+    if (prop.address) details.push(`${p.address}: ${prop.address}`);
+    if (prop.price) details.push(`${p.totalPrice}: ${prop.price.toLocaleString()} TWD`);
+    if (prop.size) details.push(`${p.area}: ${(prop.size / 3.30579).toFixed(2)} ${p.ping}`);
+    if (prop.type) details.push(`${p.propertyType}: ${prop.type}`);
+    if (prop.yearBuilt) details.push(`${p.propertyAge}: ${new Date().getFullYear() - prop.yearBuilt}年`);
+    if (prop.transactionDate) details.push(`${p.transactionDate}: ${prop.transactionDate}`);
+    return `- ${details.join(', ')}`;
+  }).join('\n')}
 
     ${p.instructions}
   `;
@@ -374,12 +374,13 @@ export const getValuation = async (
       },
     });
 
-    const jsonString = response.text.trim();
+    const text = response.text || '';
+    const jsonString = text.trim();
     const cleanedJsonString = jsonString.replace(/^```json\s*|```\s*$/g, '');
     const reportData = JSON.parse(cleanedJsonString);
-    
+
     if (!reportData.estimatedPrice || !reportData.pros || !reportData.cons) {
-        throw new Error("AI returned an incomplete data format, missing required fields.");
+      throw new Error("AI returned an incomplete data format, missing required fields.");
     }
 
     return reportData as ValuationReport;
@@ -387,18 +388,18 @@ export const getValuation = async (
   } catch (error) {
     console.error("Gemini API call failed:", error);
     if (error instanceof Error) {
-        if (error.message.includes('API Key not provided')) {
-             throw new Error("Please enter your Gemini API Key in the settings.");
-        }
-        if (error.message.includes('API key not valid')) {
-            throw new Error("The API Key you provided is invalid. Please check and try again.");
-        }
-        if (error.message.includes('SAFETY')) {
-            throw new Error("The content was filtered due to safety concerns. Please try a different query.");
-        }
-        if (error.message.includes('response is not valid JSON')) {
-            throw new Error("The AI model did not return valid JSON. Please try again later.");
-        }
+      if (error.message.includes('API Key not provided')) {
+        throw new Error("Please enter your Gemini API Key in the settings.");
+      }
+      if (error.message.includes('API key not valid')) {
+        throw new Error("The API Key you provided is invalid. Please check and try again.");
+      }
+      if (error.message.includes('SAFETY')) {
+        throw new Error("The content was filtered due to safety concerns. Please try a different query.");
+      }
+      if (error.message.includes('response is not valid JSON')) {
+        throw new Error("The AI model did not return valid JSON. Please try again later.");
+      }
     }
     throw new Error("The AI valuation service is temporarily unavailable. Please try again later.");
   }
@@ -431,19 +432,19 @@ export const getScenarioAnalysis = async (
       model: 'gemini-2.5-flash',
       contents: prompt,
     });
-    return response.text;
+    return response.text || '';
   } catch (error) {
     console.error("Gemini scenario analysis failed:", error);
     if (error instanceof Error) {
-        if (error.message.includes('API Key not provided')) {
-             throw new Error("Please enter your Gemini API Key in the settings.");
-        }
-        if (error.message.includes('API key not valid')) {
-            throw new Error("The API Key you provided is invalid. Please check and try again.");
-        }
-        if (error.message.includes('SAFETY')) {
-            throw new Error("The content was filtered due to safety concerns. Please try a different query.");
-        }
+      if (error.message.includes('API Key not provided')) {
+        throw new Error("Please enter your Gemini API Key in the settings.");
+      }
+      if (error.message.includes('API key not valid')) {
+        throw new Error("The API Key you provided is invalid. Please check and try again.");
+      }
+      if (error.message.includes('SAFETY')) {
+        throw new Error("The content was filtered due to safety concerns. Please try a different query.");
+      }
     }
     throw new Error("AI scenario analysis service is temporarily unavailable. Please try again later.");
   }
