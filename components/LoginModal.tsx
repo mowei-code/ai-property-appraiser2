@@ -7,6 +7,7 @@ import { SettingsContext } from '../contexts/SettingsContext';
 import { sendEmail } from '../services/emailService';
 import { isSupabaseConfigured } from '../supabaseClient';
 import { APP_VERSION } from '../constants';
+import { LoadingOverlay } from './LoadingOverlay';
 
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
@@ -179,14 +180,13 @@ export const LoginModal: React.FC = () => {
                     {error}
                   </div>
                 )}
-                {successMsg && (
-                  <div className="text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-900/20 p-3 rounded border border-green-200 dark:border-green-800">
-                    {successMsg}
+                {isLoading && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl">
+                    <LoadingOverlay message={t('analyzing')} isFullScreen={false} className="min-h-0 bg-transparent border-none shadow-none p-0" />
                   </div>
                 )}
 
                 <button type="button" onClick={handleForgotPasswordSubmit} disabled={isLoading || !isSupabaseConfigured} className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading || !isSupabaseConfigured ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-                  {isLoading && <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>}
                   {t('sendResetEmail')}
                 </button>
                 <div className="text-center mt-4">
@@ -196,7 +196,7 @@ export const LoginModal: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleMainSubmit} className="space-y-4">
+              <form onSubmit={handleMainSubmit} className="space-y-4 relative">
                 {isRegister && (
                   <>
                     <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('name')} className={inputClass} required disabled={!isSupabaseConfigured} />
@@ -222,8 +222,12 @@ export const LoginModal: React.FC = () => {
                     {error}
                   </div>
                 )}
+                {isLoading && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl">
+                    <LoadingOverlay message={isRegister ? t('registering') || '註冊中...' : t('logging_in') || '登入中...'} isFullScreen={false} className="min-h-0 bg-transparent border-none shadow-none p-0" />
+                  </div>
+                )}
                 <button type="submit" disabled={isLoading || !isSupabaseConfigured} className={`w-full font-bold p-3 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2 ${isLoading || !isSupabaseConfigured ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-                  {isLoading && <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>}
                   {isRegister ? t('register') : t('login')}
                 </button>
                 <div className="flex justify-between items-center text-sm">

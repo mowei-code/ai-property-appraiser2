@@ -6,7 +6,7 @@ import type { Property, Language } from '../types';
 // even when live API calls via CORS proxies fail.
 
 const TAIPEI_DAAN: Property[] = [
-    // User-provided transactions for 羅斯福路二段79之1號
+  // User-provided transactions for 羅斯福路二段79之1號
   {
     "id": "real_lvr_1",
     "address": "台北市大安區羅斯福路二段79之1號七樓之5",
@@ -261,7 +261,7 @@ const NEW_TAIPEI_ZHONGHE: Property[] = [
     "transactionDate": "2023-09-15",
     "remarks": "資料來源: 內政部實價登錄"
   },
-   {
+  {
     "id": "real_ZH5",
     "address": "新北市中和區景平路680號",
     "district": "中和區",
@@ -374,7 +374,10 @@ const TAIPEI_ZHONGSHAN: Property[] = [
 
 const TAIPEI_XINYI: Property[] = [
   { "id": "real_F1", "address": "台北市信義區信義路五段7號", "district": "信義區", "type": "電梯大樓", "price": 120000000, "size": 250, "bedrooms": 4, "bathrooms": 3, "yearBuilt": 2014, "imageUrl": "https://picsum.photos/seed/realF1/800/600", "floor": "50樓/91樓", "transactionDate": "2024-02-20" },
-  { "id": "real_F2", "address": "台北市信義區松山路540巷", "district": "信義區", "type": "公寓", "price": 19500000, "size": 85, "bedrooms": 3, "bathrooms": 1, "yearBuilt": 1980, "imageUrl": "https://picsum.photos/seed/realF2/800/600", "floor": "2樓/4樓", "transactionDate": "2023-12-05" }
+  { "id": "real_F2", "address": "台北市信義區松山路540巷", "district": "信義區", "type": "公寓", "price": 19500000, "size": 85, "bedrooms": 3, "bathrooms": 1, "yearBuilt": 1980, "imageUrl": "https://picsum.photos/seed/realF2/800/600", "floor": "2樓/4樓", "transactionDate": "2023-12-05" },
+  { "id": "real_F3", "address": "台北市信義區信安街103號", "district": "信義區", "type": "電梯大樓", "price": 28500000, "size": 95.5, "bedrooms": 2, "bathrooms": 2, "yearBuilt": 2010, "imageUrl": "https://picsum.photos/seed/realF3/800/600", "floor": "8樓/12樓", "transactionDate": "2024-05-12" },
+  { "id": "real_F4", "address": "台北市信義區信安街15巷", "district": "信義區", "type": "公寓", "price": 16800000, "size": 78.2, "bedrooms": 3, "bathrooms": 1, "yearBuilt": 1985, "imageUrl": "https://picsum.photos/seed/realF4/800/600", "floor": "3樓/5樓", "transactionDate": "2024-03-18" },
+  { "id": "real_F5", "address": "台北市信義區吳興街284巷", "district": "信義區", "type": "電梯大樓", "price": 31000000, "size": 110.4, "bedrooms": 3, "bathrooms": 2, "yearBuilt": 2015, "imageUrl": "https://picsum.photos/seed/realF5/800/600", "floor": "12樓/18樓", "transactionDate": "2024-06-01" }
 ];
 
 const NEW_TAIPEI_XINDIAN: Property[] = [
@@ -403,182 +406,182 @@ const HSINCHU_EAST: Property[] = [
 ];
 
 export const MOCK_REAL_ESTATE_DATA: Record<string, Property[]> = {
-    '台北-大安': TAIPEI_DAAN,
-    '台北-信義': TAIPEI_XINYI,
-    '台北-中山': TAIPEI_ZHONGSHAN,
-    '台北-中正': TAIPEI_DAAN, // Using Daan as fallback
-    '台北-松山': TAIPEI_ZHONGSHAN, // Using Zhongshan as fallback
-    '新北-板橋': NEW_TAIPEI_BANQIAO,
-    '新北-中和': NEW_TAIPEI_ZHONGHE,
-    '新北-永和': NEW_TAIPEI_ZHONGHE, // Yonghe is adjacent to Zhonghe
-    '新北-新店': NEW_TAIPEI_XINDIAN,
-    '新北-新莊': NEW_TAIPEI_BANQIAO, // Using Banqiao as fallback
-    '新北-三重': NEW_TAIPEI_BANQIAO, // Using Banqiao as fallback
-    '台中-西屯': TAICHUNG_XITUN,
-    '台中-南屯': TAICHUNG_XITUN, // Using Xitun as fallback
-    '台中-北屯': TAICHUNG_BEITUN,
-    '高雄-左營': KAOHSIUNG_ZUOYING,
-    '高雄-鼓山': KAOHSIUNG_GUSHAN,
-    '高雄-三民': KAOHSIUNG_ZUOYING, // Using Zuoying as fallback
-    '台南-東': TAINAN_EAST,
-    '台南-安平': TAINAN_EAST,
-    '新竹-東': HSINCHU_EAST,
-    '新竹-竹北': HSINCHU_EAST,
+  '台北-大安': TAIPEI_DAAN,
+  '台北-信義': TAIPEI_XINYI,
+  '台北-中山': TAIPEI_ZHONGSHAN,
+  '台北-中正': TAIPEI_DAAN, // Using Daan as fallback
+  '台北-松山': TAIPEI_ZHONGSHAN, // Using Zhongshan as fallback
+  '新北-板橋': NEW_TAIPEI_BANQIAO,
+  '新北-中和': NEW_TAIPEI_ZHONGHE,
+  '新北-永和': NEW_TAIPEI_ZHONGHE, // Yonghe is adjacent to Zhonghe
+  '新北-新店': NEW_TAIPEI_XINDIAN,
+  '新北-新莊': NEW_TAIPEI_BANQIAO, // Using Banqiao as fallback
+  '新北-三重': NEW_TAIPEI_BANQIAO, // Using Banqiao as fallback
+  '台中-西屯': TAICHUNG_XITUN,
+  '台中-南屯': TAICHUNG_XITUN, // Using Xitun as fallback
+  '台中-北屯': TAICHUNG_BEITUN,
+  '高雄-左營': KAOHSIUNG_ZUOYING,
+  '高雄-鼓山': KAOHSIUNG_GUSHAN,
+  '高雄-三民': KAOHSIUNG_ZUOYING, // Using Zuoying as fallback
+  '台南-東': TAINAN_EAST,
+  '台南-安平': TAINAN_EAST,
+  '新竹-東': HSINCHU_EAST,
+  '新竹-竹北': HSINCHU_EAST,
 };
 
 
 const translations: Record<Language, Record<string, Partial<Property>>> = {
-    'en': {
-        // TAIPEI_DAAN
-        'real_lvr_1': { address: '7F-5, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '7F/12F' },
-        'real_lvr_2': { address: '5F-6, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '5F/12F' },
-        'real_lvr_3': { address: '9F, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/12F' },
-        'real_lvr_4': { address: '9F-4, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/12F' },
-        'real_A1': { address: 'No. 25, Sec. 4, Xinyi Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '12F/25F' },
-        'real_A2': { address: 'No. 162, Sec. 1, Heping E. Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '4F/5F' },
-        'real_A3': { address: 'Ln. 81, Sec. 3, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '5F/10F' },
-        'real_A4': { address: 'No. 300, Sec. 1, Fuxing S. Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '20F/28F' },
-        'real_A5': { address: 'Ln. 112, Sec. 4, Ren\'ai Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/14F' },
-        // NEW_TAIPEI_BANQIAO
-        'real_B1': { address: 'No. 10, Sec. 2, Xianmin Blvd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '18F/30F' },
-        'real_B2': { address: 'No. 150, Sec. 1, Zhongshan Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '7F/12F' },
-        'real_B3': { address: 'Ln. 270, Hansheng E. Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '3F/5F' },
-        'real_B4': { address: 'No. 28, Xinzhan Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '25F/34F' },
-        // NEW_TAIPEI_ZHONGHE
-        'real_ZH1': { address: '7F, No. 7, Zhongzheng Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '7F/12F' },
-        'real_ZH2': { address: '17F, No. 122, Sec. 3, Zhongshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '17F/27F' },
-        'real_ZH3': { address: '19F, No. 122, Nanshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '19F/26F' },
-        'real_ZH4': { address: '11F-1, No. 126, Zhongshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '11F/25F' },
-        'real_ZH5': { address: 'No. 680, Jingping Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '10F/22F' },
-        // TAICHUNG_XITUN
-        'real_C1': { address: 'No. 100, Shizheng Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '22F/29F' },
-        'real_C2': { address: 'Ln. 20, Fengjia Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '1-4F/4F' },
-        'real_C3': { address: 'No. 200, Sec. 2, Qinghai Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '6F/14F' },
-        // KAOHSIUNG_ZUOYING
-        'real_D1': { address: 'No. 10, Sec. 3, Bo\'ai Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '15F/24F' },
-        'real_D2': { address: 'No. 200, Fuguo Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '8F/12F' },
-        'real_D3': { address: 'No. 330, Mingcheng 2nd Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '11F/21F' },
-        // New Additions
-        'real_E1': { address: 'No. 200, Sec. 3, Nanjing E. Rd, Zhongshan Dist., Taipei City', district: 'Zhongshan District', floor: '10F/15F' },
-        'real_E2': { address: 'Ln. 147, Sec. 2, Minsheng E. Rd, Zhongshan Dist., Taipei City', district: 'Zhongshan District', floor: '3F/5F' },
-        'real_F1': { address: 'No. 7, Sec. 5, Xinyi Rd, Xinyi Dist., Taipei City', district: 'Xinyi District', floor: '50F/91F' },
-        'real_F2': { address: 'Ln. 540, Songshan Rd, Xinyi Dist., Taipei City', district: 'Xinyi District', floor: '2F/4F' },
-        'real_G1': { address: 'No. 100, Sec. 3, Beixin Rd, Xindian Dist., New Taipei City', district: 'Xindian District', floor: '11F/23F' },
-        'real_G2': { address: 'Ln. 500, Zhongzheng Rd, Xindian Dist., New Taipei City', district: 'Xindian District', floor: '4F/5F' },
-        'real_H1': { address: 'No. 50, Sec. 3, Chongde Rd, Beitun Dist., Taichung City', district: 'Beitun District', floor: '16F/24F' },
-        'real_H2': { address: 'No. 800, Sec. 4, Wenxin Rd, Beitun Dist., Taichung City', district: 'Beitun District', floor: '9F/14F' },
-        'real_I1': { address: 'No. 80, Meishuguan Rd, Gushan Dist., Kaohsiung City', district: 'Gushan District', floor: '20F/28F' },
-        'real_I2': { address: 'No. 10, Linhai 2nd Rd, Gushan Dist., Kaohsiung City', district: 'Gushan District', floor: '1-3F/3F' },
-        'real_J1': { address: 'No. 300, Sec. 3, Zhonghua E. Rd, East Dist., Tainan City', district: 'East District', floor: '10F/19F' },
-        'real_J2': { address: 'No. 89, Daxue Rd. W. Sec., East Dist., Tainan City', district: 'East District', floor: '5F/10F' },
-        'real_K1': { address: 'No. 100, Guanxin Rd, East Dist., Hsinchu City', district: 'East District', floor: '14F/25F' },
-        'real_K2': { address: 'Ln. 50, Sec. 1, Guangfu Rd, East Dist., Hsinchu City', district: 'East District', floor: '2F/5F' },
-    },
-    'zh-CN': {
-        // TAIPEI_DAAN
-        'real_lvr_1': { address: '台北市大安区罗斯福路二段79之1号七楼之5', district: "大安区", floor: '七层/十二层' },
-        'real_lvr_2': { address: '台北市大安区罗斯福路二段79之1号五楼之6', district: "大安区", floor: '五层/十二层' },
-        'real_lvr_3': { address: '台北市大安区罗斯福路二段79之1号九楼', district: "大安区", floor: '九层/十二层' },
-        'real_lvr_4': { address: '台北市大安区罗斯福路二段79之1号九楼之4', district: "大安区", floor: '九层/十二层' },
-        'real_A1': { address: '台北市大安区信义路四段25号', district: "大安区", floor: '12楼/25楼' },
-        'real_A2': { address: '台北市大安区和平东路一段162号', district: "大安区", floor: '4楼/5楼' },
-        'real_A3': { address: '台北市大安区罗斯福路三段81巷', district: "大安区", floor: '5楼/10楼' },
-        'real_A4': { address: '台北市大安区复兴南路一段300号', district: "大安区", floor: '20楼/28楼' },
-        'real_A5': { address: '台北市大安区仁爱路四段112巷', district: "大安区", floor: '9楼/14楼' },
-        // NEW_TAIPEI_BANQIAO
-        'real_B1': { address: '新北市板桥区县民大道二段10号', district: '板桥区', floor: '18楼/30楼' },
-        'real_B2': { address: '新北市板桥区中山路一段150号', district: '板桥区', floor: '7楼/12楼' },
-        'real_B3': { address: '新北市板桥区汉生东路270巷', district: '板桥区', floor: '3楼/5楼' },
-        'real_B4': { address: '新北市板桥区新站路28号', district: '板桥区', floor: '25楼/34楼' },
-        // NEW_TAIPEI_ZHONGHE
-        'real_ZH1': { address: '新北市中和区中正路7号七楼', district: '中和区', floor: '七层/十二层' },
-        'real_ZH2': { address: '新北市中和区中山路三段122号十七楼', district: '中和区', floor: '十七层/二十七层' },
-        'real_ZH3': { address: '新北市中和区南山路122号十九楼', district: '中和区', floor: '十九层/二十六层' },
-        'real_ZH4': { address: '新北市中和区中山路126号十一楼之一', district: '中和区', floor: '十一层/二十五层' },
-        'real_ZH5': { address: '新北市中和区景平路680号', district: '中和区', floor: '10楼/22楼' },
-        // TAICHUNG_XITUN
-        'real_C1': { address: '台中市西屯区市政路100号', district: '西屯区', floor: '22楼/29楼' },
-        'real_C2': { address: '台中市西屯区逢甲路20巷', district: '西屯区', floor: '1-4楼/4楼' },
-        'real_C3': { address: '台中市西屯区青海路二段200号', district: '西屯区', floor: '6楼/14楼' },
-        // KAOHSIUNG_ZUOYING
-        'real_D1': { address: '高雄市左营区博爱三路10号', district: '左营区', floor: '15楼/24楼' },
-        'real_D2': { address: '高雄市左营区富国路200号', district: '左营区', floor: '8楼/12楼' },
-        'real_D3': { address: '高雄市左营区明诚二路330号', district: '左营区', floor: '11楼/21楼' },
-        // New Additions
-        'real_E1': { address: '台北市中山区南京东路三段200号', district: '中山区', floor: '10楼/15楼' },
-        'real_E2': { address: '台北市中山区民生东路二段147巷', district: '中山区', floor: '3楼/5楼' },
-        'real_F1': { address: '台北市信义区信义路五段7号', district: '信义区', floor: '50楼/91楼' },
-        'real_F2': { address: '台北市信义区松山路540巷', district: '信义区', floor: '2楼/4楼' },
-        'real_G1': { address: '新北市新店区北新路三段100号', district: '新店区', floor: '11楼/23楼' },
-        'real_G2': { address: '新北市新店区中正路500巷', district: '新店区', floor: '4楼/5楼' },
-        'real_H1': { address: '台中市北屯区崇德路三段50号', district: '北屯区', floor: '16楼/24楼' },
-        'real_H2': { address: '台中市北屯区文心路四段800号', district: '北屯区', floor: '9楼/14楼' },
-        'real_I1': { address: '高雄市鼓山区美术馆路80号', district: '鼓山区', floor: '20楼/28楼' },
-        'real_I2': { address: '高雄市鼓山区临海二路10号', district: '鼓山区', floor: '1-3楼/3楼' },
-        'real_J1': { address: '台南市东区中华东路三段300号', district: '东区', floor: '10楼/19楼' },
-        'real_J2': { address: '台南市东区大学路西段89号', district: '东区', floor: '5楼/10楼' },
-        'real_K1': { address: '新竹市东区关新路100号', district: '东区', floor: '14楼/25楼' },
-        'real_K2': { address: '新竹市东区光复路一段50巷', district: '东区', floor: '2楼/5楼' },
-    },
-    'ja': {
-        // TAIPEI_DAAN
-        'real_lvr_1': { address: '台北市大安区羅斯福路二段79之1号7階の5', district: "大安区", floor: '7階/12階' },
-        'real_lvr_2': { address: '台北市大安区羅斯福路二段79之1号5階の6', district: "大安区", floor: '5階/12階' },
-        'real_lvr_3': { address: '台北市大安区羅斯福路二段79之1号9階', district: "大安区", floor: '9階/12階' },
-        'real_lvr_4': { address: '台北市大安区羅斯福路二段79之1号9階の4', district: "大安区", floor: '9階/12階' },
-        'real_A1': { address: '台北市大安区信義路四段25号', district: "大安区", floor: '12階/25階' },
-        'real_A2': { address: '台北市大安区和平東路一段162号', district: "大安区", floor: '4階/5階' },
-        'real_A3': { address: '台北市大安区羅斯福路三段81巷', district: "大安区", floor: '5階/10階' },
-        'real_A4': { address: '台北市大安区復興南路一段300号', district: "大安区", floor: '20階/28階' },
-        'real_A5': { address: '台北市大安区仁愛路四段112巷', district: "大安区", floor: '9階/14階' },
-        // NEW_TAIPEI_BANQIAO
-        'real_B1': { address: '新北市板橋区県民大道二段10号', district: '板橋区', floor: '18階/30階' },
-        'real_B2': { address: '新北市板橋区中山路一段150号', district: '板橋区', floor: '7階/12階' },
-        'real_B3': { address: '新北市板橋区漢生東路270巷', district: '板橋区', floor: '3階/5階' },
-        'real_B4': { address: '新北市板橋区新站路28号', district: '板橋区', floor: '25階/34階' },
-        // NEW_TAIPEI_ZHONGHE
-        'real_ZH1': { address: '新北市中和区中正路7号7階', district: '中和区', floor: '7階/12階' },
-        'real_ZH2': { address: '新北市中和区中山路三段122号17階', district: '中和区', floor: '17階/27階' },
-        'real_ZH3': { address: '新北市中和区南山路122号19階', district: '中和区', floor: '19階/26階' },
-        'real_ZH4': { address: '新北市中和区中山路126号11階の1', district: '中和区', floor: '11階/25階' },
-        'real_ZH5': { address: '新北市中和区景平路680号', district: '中和区', floor: '10階/22階' },
-        // TAICHUNG_XITUN
-        'real_C1': { address: '台中市西屯区市政路100号', district: '西屯区', floor: '22階/29階' },
-        'real_C2': { address: '台中市西屯区逢甲路20巷', district: '西屯区', floor: '1-4階/4階' },
-        'real_C3': { address: '台中市西屯区青海路二段200号', district: '西屯区', floor: '6階/14階' },
-        // KAOHSIUNG_ZUOYING
-        'real_D1': { address: '高雄市左営区博愛三路10号', district: '左営区', floor: '15階/24階' },
-        'real_D2': { address: '高雄市左営区富国路200号', district: '左営区', floor: '8階/12階' },
-        'real_D3': { address: '高雄市左営区明誠二路330号', district: '左営区', floor: '11階/21階' },
-        // New Additions
-        'real_E1': { address: '台北市中山区南京東路三段200号', district: '中山区', floor: '10階/15階' },
-        'real_E2': { address: '台北市中山区民生東路二段147巷', district: '中山区', floor: '3階/5階' },
-        'real_F1': { address: '台北市信義区信義路五段7号', district: '信義区', floor: '50階/91階' },
-        'real_F2': { address: '台北市信義区松山路540巷', district: '信義区', floor: '2階/4階' },
-        'real_G1': { address: '新北市新店区北新路三段100号', district: '新店区', floor: '11階/23階' },
-        'real_G2': { address: '新北市新店区中正路500巷', district: '新店区', floor: '4階/5階' },
-        'real_H1': { address: '台中市北屯区崇徳路三段50号', district: '北屯区', floor: '16階/24階' },
-        'real_H2': { address: '台中市北屯区文心路四段800号', district: '北屯区', floor: '9階/14階' },
-        'real_I1': { address: '高雄市鼓山区美術館路80号', district: '鼓山区', floor: '20階/28階' },
-        'real_I2': { address: '高雄市鼓山区臨海二路10号', district: '鼓山区', floor: '1-3階/3階' },
-        'real_J1': { address: '台南市東区中華東路三段300号', district: '東区', floor: '10階/19階' },
-        'real_J2': { address: '台南市東区大学路西段89号', district: '東区', floor: '5階/10階' },
-        'real_K1': { address: '新竹市東区関新路100号', district: '東区', floor: '14階/25階' },
-        'real_K2': { address: '新竹市東区光復路一段50巷', district: '東区', floor: '2階/5階' },
-    },
-    'zh-TW': {}, // No translation needed for default
+  'en': {
+    // TAIPEI_DAAN
+    'real_lvr_1': { address: '7F-5, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '7F/12F' },
+    'real_lvr_2': { address: '5F-6, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '5F/12F' },
+    'real_lvr_3': { address: '9F, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/12F' },
+    'real_lvr_4': { address: '9F-4, No. 79-1, Sec. 2, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/12F' },
+    'real_A1': { address: 'No. 25, Sec. 4, Xinyi Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '12F/25F' },
+    'real_A2': { address: 'No. 162, Sec. 1, Heping E. Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '4F/5F' },
+    'real_A3': { address: 'Ln. 81, Sec. 3, Roosevelt Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '5F/10F' },
+    'real_A4': { address: 'No. 300, Sec. 1, Fuxing S. Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '20F/28F' },
+    'real_A5': { address: 'Ln. 112, Sec. 4, Ren\'ai Rd, Da\'an Dist., Taipei City', district: "Da'an District", floor: '9F/14F' },
+    // NEW_TAIPEI_BANQIAO
+    'real_B1': { address: 'No. 10, Sec. 2, Xianmin Blvd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '18F/30F' },
+    'real_B2': { address: 'No. 150, Sec. 1, Zhongshan Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '7F/12F' },
+    'real_B3': { address: 'Ln. 270, Hansheng E. Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '3F/5F' },
+    'real_B4': { address: 'No. 28, Xinzhan Rd, Banqiao Dist., New Taipei City', district: 'Banqiao District', floor: '25F/34F' },
+    // NEW_TAIPEI_ZHONGHE
+    'real_ZH1': { address: '7F, No. 7, Zhongzheng Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '7F/12F' },
+    'real_ZH2': { address: '17F, No. 122, Sec. 3, Zhongshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '17F/27F' },
+    'real_ZH3': { address: '19F, No. 122, Nanshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '19F/26F' },
+    'real_ZH4': { address: '11F-1, No. 126, Zhongshan Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '11F/25F' },
+    'real_ZH5': { address: 'No. 680, Jingping Rd, Zhonghe Dist., New Taipei City', district: 'Zhonghe District', floor: '10F/22F' },
+    // TAICHUNG_XITUN
+    'real_C1': { address: 'No. 100, Shizheng Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '22F/29F' },
+    'real_C2': { address: 'Ln. 20, Fengjia Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '1-4F/4F' },
+    'real_C3': { address: 'No. 200, Sec. 2, Qinghai Rd, Xitun Dist., Taichung City', district: 'Xitun District', floor: '6F/14F' },
+    // KAOHSIUNG_ZUOYING
+    'real_D1': { address: 'No. 10, Sec. 3, Bo\'ai Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '15F/24F' },
+    'real_D2': { address: 'No. 200, Fuguo Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '8F/12F' },
+    'real_D3': { address: 'No. 330, Mingcheng 2nd Rd, Zuoying Dist., Kaohsiung City', district: 'Zuoying District', floor: '11F/21F' },
+    // New Additions
+    'real_E1': { address: 'No. 200, Sec. 3, Nanjing E. Rd, Zhongshan Dist., Taipei City', district: 'Zhongshan District', floor: '10F/15F' },
+    'real_E2': { address: 'Ln. 147, Sec. 2, Minsheng E. Rd, Zhongshan Dist., Taipei City', district: 'Zhongshan District', floor: '3F/5F' },
+    'real_F1': { address: 'No. 7, Sec. 5, Xinyi Rd, Xinyi Dist., Taipei City', district: 'Xinyi District', floor: '50F/91F' },
+    'real_F2': { address: 'Ln. 540, Songshan Rd, Xinyi Dist., Taipei City', district: 'Xinyi District', floor: '2F/4F' },
+    'real_G1': { address: 'No. 100, Sec. 3, Beixin Rd, Xindian Dist., New Taipei City', district: 'Xindian District', floor: '11F/23F' },
+    'real_G2': { address: 'Ln. 500, Zhongzheng Rd, Xindian Dist., New Taipei City', district: 'Xindian District', floor: '4F/5F' },
+    'real_H1': { address: 'No. 50, Sec. 3, Chongde Rd, Beitun Dist., Taichung City', district: 'Beitun District', floor: '16F/24F' },
+    'real_H2': { address: 'No. 800, Sec. 4, Wenxin Rd, Beitun Dist., Taichung City', district: 'Beitun District', floor: '9F/14F' },
+    'real_I1': { address: 'No. 80, Meishuguan Rd, Gushan Dist., Kaohsiung City', district: 'Gushan District', floor: '20F/28F' },
+    'real_I2': { address: 'No. 10, Linhai 2nd Rd, Gushan Dist., Kaohsiung City', district: 'Gushan District', floor: '1-3F/3F' },
+    'real_J1': { address: 'No. 300, Sec. 3, Zhonghua E. Rd, East Dist., Tainan City', district: 'East District', floor: '10F/19F' },
+    'real_J2': { address: 'No. 89, Daxue Rd. W. Sec., East Dist., Tainan City', district: 'East District', floor: '5F/10F' },
+    'real_K1': { address: 'No. 100, Guanxin Rd, East Dist., Hsinchu City', district: 'East District', floor: '14F/25F' },
+    'real_K2': { address: 'Ln. 50, Sec. 1, Guangfu Rd, East Dist., Hsinchu City', district: 'East District', floor: '2F/5F' },
+  },
+  'zh-CN': {
+    // TAIPEI_DAAN
+    'real_lvr_1': { address: '台北市大安区罗斯福路二段79之1号七楼之5', district: "大安区", floor: '七层/十二层' },
+    'real_lvr_2': { address: '台北市大安区罗斯福路二段79之1号五楼之6', district: "大安区", floor: '五层/十二层' },
+    'real_lvr_3': { address: '台北市大安区罗斯福路二段79之1号九楼', district: "大安区", floor: '九层/十二层' },
+    'real_lvr_4': { address: '台北市大安区罗斯福路二段79之1号九楼之4', district: "大安区", floor: '九层/十二层' },
+    'real_A1': { address: '台北市大安区信义路四段25号', district: "大安区", floor: '12楼/25楼' },
+    'real_A2': { address: '台北市大安区和平东路一段162号', district: "大安区", floor: '4楼/5楼' },
+    'real_A3': { address: '台北市大安区罗斯福路三段81巷', district: "大安区", floor: '5楼/10楼' },
+    'real_A4': { address: '台北市大安区复兴南路一段300号', district: "大安区", floor: '20楼/28楼' },
+    'real_A5': { address: '台北市大安区仁爱路四段112巷', district: "大安区", floor: '9楼/14楼' },
+    // NEW_TAIPEI_BANQIAO
+    'real_B1': { address: '新北市板桥区县民大道二段10号', district: '板桥区', floor: '18楼/30楼' },
+    'real_B2': { address: '新北市板桥区中山路一段150号', district: '板桥区', floor: '7楼/12楼' },
+    'real_B3': { address: '新北市板桥区汉生东路270巷', district: '板桥区', floor: '3楼/5楼' },
+    'real_B4': { address: '新北市板桥区新站路28号', district: '板桥区', floor: '25楼/34楼' },
+    // NEW_TAIPEI_ZHONGHE
+    'real_ZH1': { address: '新北市中和区中正路7号七楼', district: '中和区', floor: '七层/十二层' },
+    'real_ZH2': { address: '新北市中和区中山路三段122号十七楼', district: '中和区', floor: '十七层/二十七层' },
+    'real_ZH3': { address: '新北市中和区南山路122号十九楼', district: '中和区', floor: '十九层/二十六层' },
+    'real_ZH4': { address: '新北市中和区中山路126号十一楼之一', district: '中和区', floor: '十一层/二十五层' },
+    'real_ZH5': { address: '新北市中和区景平路680号', district: '中和区', floor: '10楼/22楼' },
+    // TAICHUNG_XITUN
+    'real_C1': { address: '台中市西屯区市政路100号', district: '西屯区', floor: '22楼/29楼' },
+    'real_C2': { address: '台中市西屯区逢甲路20巷', district: '西屯区', floor: '1-4楼/4楼' },
+    'real_C3': { address: '台中市西屯区青海路二段200号', district: '西屯区', floor: '6楼/14楼' },
+    // KAOHSIUNG_ZUOYING
+    'real_D1': { address: '高雄市左营区博爱三路10号', district: '左营区', floor: '15楼/24楼' },
+    'real_D2': { address: '高雄市左营区富国路200号', district: '左营区', floor: '8楼/12楼' },
+    'real_D3': { address: '高雄市左营区明诚二路330号', district: '左营区', floor: '11楼/21楼' },
+    // New Additions
+    'real_E1': { address: '台北市中山区南京东路三段200号', district: '中山区', floor: '10楼/15楼' },
+    'real_E2': { address: '台北市中山区民生东路二段147巷', district: '中山区', floor: '3楼/5楼' },
+    'real_F1': { address: '台北市信义区信义路五段7号', district: '信义区', floor: '50楼/91楼' },
+    'real_F2': { address: '台北市信义区松山路540巷', district: '信义区', floor: '2楼/4楼' },
+    'real_G1': { address: '新北市新店区北新路三段100号', district: '新店区', floor: '11楼/23楼' },
+    'real_G2': { address: '新北市新店区中正路500巷', district: '新店区', floor: '4楼/5楼' },
+    'real_H1': { address: '台中市北屯区崇德路三段50号', district: '北屯区', floor: '16楼/24楼' },
+    'real_H2': { address: '台中市北屯区文心路四段800号', district: '北屯区', floor: '9楼/14楼' },
+    'real_I1': { address: '高雄市鼓山区美术馆路80号', district: '鼓山区', floor: '20楼/28楼' },
+    'real_I2': { address: '高雄市鼓山区临海二路10号', district: '鼓山区', floor: '1-3楼/3楼' },
+    'real_J1': { address: '台南市东区中华东路三段300号', district: '东区', floor: '10楼/19楼' },
+    'real_J2': { address: '台南市东区大学路西段89号', district: '东区', floor: '5楼/10楼' },
+    'real_K1': { address: '新竹市东区关新路100号', district: '东区', floor: '14楼/25楼' },
+    'real_K2': { address: '新竹市东区光复路一段50巷', district: '东区', floor: '2楼/5楼' },
+  },
+  'ja': {
+    // TAIPEI_DAAN
+    'real_lvr_1': { address: '台北市大安区羅斯福路二段79之1号7階の5', district: "大安区", floor: '7階/12階' },
+    'real_lvr_2': { address: '台北市大安区羅斯福路二段79之1号5階の6', district: "大安区", floor: '5階/12階' },
+    'real_lvr_3': { address: '台北市大安区羅斯福路二段79之1号9階', district: "大安区", floor: '9階/12階' },
+    'real_lvr_4': { address: '台北市大安区羅斯福路二段79之1号9階の4', district: "大安区", floor: '9階/12階' },
+    'real_A1': { address: '台北市大安区信義路四段25号', district: "大安区", floor: '12階/25階' },
+    'real_A2': { address: '台北市大安区和平東路一段162号', district: "大安区", floor: '4階/5階' },
+    'real_A3': { address: '台北市大安区羅斯福路三段81巷', district: "大安区", floor: '5階/10階' },
+    'real_A4': { address: '台北市大安区復興南路一段300号', district: "大安区", floor: '20階/28階' },
+    'real_A5': { address: '台北市大安区仁愛路四段112巷', district: "大安区", floor: '9階/14階' },
+    // NEW_TAIPEI_BANQIAO
+    'real_B1': { address: '新北市板橋区県民大道二段10号', district: '板橋区', floor: '18階/30階' },
+    'real_B2': { address: '新北市板橋区中山路一段150号', district: '板橋区', floor: '7階/12階' },
+    'real_B3': { address: '新北市板橋区漢生東路270巷', district: '板橋区', floor: '3階/5階' },
+    'real_B4': { address: '新北市板橋区新站路28号', district: '板橋区', floor: '25階/34階' },
+    // NEW_TAIPEI_ZHONGHE
+    'real_ZH1': { address: '新北市中和区中正路7号7階', district: '中和区', floor: '7階/12階' },
+    'real_ZH2': { address: '新北市中和区中山路三段122号17階', district: '中和区', floor: '17階/27階' },
+    'real_ZH3': { address: '新北市中和区南山路122号19階', district: '中和区', floor: '19階/26階' },
+    'real_ZH4': { address: '新北市中和区中山路126号11階の1', district: '中和区', floor: '11階/25階' },
+    'real_ZH5': { address: '新北市中和区景平路680号', district: '中和区', floor: '10階/22階' },
+    // TAICHUNG_XITUN
+    'real_C1': { address: '台中市西屯区市政路100号', district: '西屯区', floor: '22階/29階' },
+    'real_C2': { address: '台中市西屯区逢甲路20巷', district: '西屯区', floor: '1-4階/4階' },
+    'real_C3': { address: '台中市西屯区青海路二段200号', district: '西屯区', floor: '6階/14階' },
+    // KAOHSIUNG_ZUOYING
+    'real_D1': { address: '高雄市左営区博愛三路10号', district: '左営区', floor: '15階/24階' },
+    'real_D2': { address: '高雄市左営区富国路200号', district: '左営区', floor: '8階/12階' },
+    'real_D3': { address: '高雄市左営区明誠二路330号', district: '左営区', floor: '11階/21階' },
+    // New Additions
+    'real_E1': { address: '台北市中山区南京東路三段200号', district: '中山区', floor: '10階/15階' },
+    'real_E2': { address: '台北市中山区民生東路二段147巷', district: '中山区', floor: '3階/5階' },
+    'real_F1': { address: '台北市信義区信義路五段7号', district: '信義区', floor: '50階/91階' },
+    'real_F2': { address: '台北市信義区松山路540巷', district: '信義区', floor: '2階/4階' },
+    'real_G1': { address: '新北市新店区北新路三段100号', district: '新店区', floor: '11階/23階' },
+    'real_G2': { address: '新北市新店区中正路500巷', district: '新店区', floor: '4階/5階' },
+    'real_H1': { address: '台中市北屯区崇徳路三段50号', district: '北屯区', floor: '16階/24階' },
+    'real_H2': { address: '台中市北屯区文心路四段800号', district: '北屯区', floor: '9階/14階' },
+    'real_I1': { address: '高雄市鼓山区美術館路80号', district: '鼓山区', floor: '20階/28階' },
+    'real_I2': { address: '高雄市鼓山区臨海二路10号', district: '鼓山区', floor: '1-3階/3階' },
+    'real_J1': { address: '台南市東区中華東路三段300号', district: '東区', floor: '10階/19階' },
+    'real_J2': { address: '台南市東区大学路西段89号', district: '東区', floor: '5階/10階' },
+    'real_K1': { address: '新竹市東区関新路100号', district: '東区', floor: '14階/25階' },
+    'real_K2': { address: '新竹市東区光復路一段50巷', district: '東区', floor: '2階/5階' },
+  },
+  'zh-TW': {}, // No translation needed for default
 };
 
 export const translateMockData = (data: Property[], language: Language): Property[] => {
-    if (language === 'zh-TW') {
-        return data;
+  if (language === 'zh-TW') {
+    return data;
+  }
+  const langTranslations = translations[language] || {};
+  return data.map(prop => {
+    const translation = langTranslations[prop.id];
+    if (translation) {
+      return { ...prop, ...translation };
     }
-    const langTranslations = translations[language] || {};
-    return data.map(prop => {
-        const translation = langTranslations[prop.id];
-        if (translation) {
-            return { ...prop, ...translation };
-        }
-        return prop;
-    });
+    return prop;
+  });
 };

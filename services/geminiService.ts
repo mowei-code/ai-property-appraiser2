@@ -154,7 +154,8 @@ const getPrompts = (language: Language) => {
 - **特別注意**：當估價參考基準為 **'都更危老評估'** 時，請在 \`marketSummary\` 與 \`pros/cons\` 中，特別針對該物件的土地持分價值、使用分區強度（如容積率）、以及是否符合危老重建條例的潛力進行深入分析。
 - **特別注意**：當估價參考基準為 **'商業效益評估'** 時，請重點評估該物件作為店面或辦公室的商業潛力，包括人流量、商圈屬性與租金效益，並反映在價格中。
 - **特別注意**：當估價參考基準為 **'結構安全評估'** 時，請根據屋齡與建築類型，分析可能的耐震係數與結構風險（如海砂屋、土壤液化區），並在報告中適度反映折舊或風險貼水。
-- **特別注意**：當估價參考基準為 **'自訂估價指令'** 時，請**優先遵循**使用者提供的自訂指令進行分析與估價。將使用者的特定需求（如裝潢增值、特殊設施影響等）納入核心考量。
+- **特別注意**：當估價參考基準為 **'交通路線規劃'** 時，請深入分析該物件與周邊捷運站、公車站點的分佈情形，並模擬從該處出發至主要商業中心（如台北101、科學園區等）的交通動線與預期通勤時間，將此交通溢價反映在價格中。
+- **特別注意**：當估價參考基準為 **'自訂估價指令'** 時，這是一個**全面 AI 驅動**的分析功能。請扮演一位房產智囊，深入挖掘使用者自訂指令中的每一項細節（如特殊裝潢、風水佈局、或獨特的商業用途建議等），提供極具洞察力的自由風格分析與精確估價。
 - 其他估價基準則**不需要** \`realtorAnalysis\`、\`foreclosureAnalysis\` 或 \`rentalYieldAnalysisData\` 欄位。
 - 輸出語言為繁體中文。`,
       scenarioSystem: '請扮演一位專業的台灣房地產AI分析師。',
@@ -242,7 +243,8 @@ const getPrompts = (language: Language) => {
 - **SPECIAL NOTE**: When the valuation basis is **'Urban Renewal Potential'**, please focus your analysis in \`marketSummary\` and \`pros/cons\` on land share value, zoning intensity (e.g., FAR), and potential for reconstruction under Urban Renewal laws.
 - **SPECIAL NOTE**: When the valuation basis is **'Commercial Value'**, please focus on the commercial potential as a storefront or office, including foot traffic, district attributes, and rental yield efficiency, reflecting this in the price.
 - **SPECIAL NOTE**: When the valuation basis is **'Structural Safety'**, please analyze potential seismic resistance and structural risks (e.g., sea-sand buildings, soil liquefaction zones) based on age and building type, applying appropriate depreciation or risk premiums.
-- **SPECIAL NOTE**: When the valuation basis is **'Custom Valuation'**, please **prioritize** the user's custom request/instructions for your analysis and valuation. Incorporate their specific needs (e.g., renovation value, special facility impact) as core considerations.
+- **SPECIAL NOTE**: When the valuation basis is **'Traffic Route Planning'**, please perform a deep analysis of the distribution of nearby MRT and bus stations. Simulate the traffic routes and expected commuting times from the property to major business centers (e.g., Taipei 101, Science Parks), and reflect this transportation premium in the price.
+- **SPECIAL NOTE**: When the valuation basis is **'Custom Valuation'**, this is a **fully AI-driven** intelligence feature. Act as a real estate mastermind, deeply mining every detail in the user's custom instructions (e.g., specific renovation, feng shui layout, or unique commercial use cases), providing highly insightful free-style analysis and precise valuation.
 - For all other valuation bases, the \`realtorAnalysis\`, \`foreclosureAnalysis\`, and \`rentalYieldAnalysisData\` fields are **NOT required**.
 - The output language must be English.`,
       scenarioSystem: 'Act as a professional Taiwanese real estate AI analyst.',
@@ -286,7 +288,8 @@ const getPrompts = (language: Language) => {
 - **特記事項**：評価基準が **'都市更新ポテンシャル'** の場合、\`marketSummary\` と \`pros/cons\` において、土地持分価値、用途地域（容積率など）、および都市更新・建替え条例への適合性に焦点を当てて分析してください。
 - **特記事項**：評価基準が **'商業価値評価'** の場合、店舗やオフィスとしての商業的ポテンシャル（人通り、商圏特性、賃料収益性など）を重点的に評価し、価格に反映させてください。
 - **特記事項**：評価基準が **'構造安全性評価'** の場合、築年数と建築タイプに基づき、耐震性や構造リスク（海砂屋、液状化エリアなど）を分析し、適切な減価償却やリスクプレミアムを反映させてください。
-- **特記事項**：評価基準が **'カスタム評価リクエスト'** の場合、ユーザーが提供したカスタム指示を**優先的に**遵守して分析と評価を行ってください。ユーザーの特定のニーズ（リフォームによる価値向上、特殊施設の影響など）を中核的な考慮事項として組み込んでください。
+- **特記事項**：評価基準が **'交通路線計画'** の場合、周辺のMRT駅やバス停の分布状況を詳細に分析してください。そこから主要なビジネスセンター（台北101、サイエンスパークなど）への交通動線と予想通勤時間をシミュレートし、この交通プレミアムを価格に反映させてください。
+- **特記事項**：評価基準が **'カスタム評価指示'** の場合、これは**全面的にAIが主導する**インテリジェンス機能です。不動産の黒幕として、ユーザーのカスタム指示のあらゆる細部（特殊な内装、風水、独自の商業利用の提案など）を深く掘り下げ、洞察に満ちたフリースタイルの分析と精密な評価を提供してください。
 - その他の評価基準の場合は、\`realtorAnalysis\`、\`foreclosureAnalysis\`、および \`rentalYieldAnalysisData\` フィールドは**不要**です。
 - 出力言語は日本語でなければなりません。`,
       scenarioSystem: 'プロの台湾不動産AIアナリストとして行動してください。',

@@ -12,19 +12,19 @@ export const APP_RELEASE_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_
 export const mockProperties: Property[] = [
   {
     id: 'prop1',
-    address: '台北市大安區羅斯福路二段79之1號',
-    city: '台北市',
-    district: '大安區',
-    type: '華廈',
-    price: 24880000,
-    size: 90.54, // Approx 27.4坪
+    address: '臺北市信義區信安街15巷1號',
+    city: '臺北市',
+    district: '信義區',
+    type: '電梯大樓',
+    price: 32000000,
+    size: 105.6, // Approx 31.9坪
     bedrooms: 3,
     bathrooms: 2,
-    yearBuilt: 1988,
+    yearBuilt: 2012,
     imageUrl: 'https://picsum.photos/seed/prop1/800/600',
-    latitude: 25.0259,
-    longitude: 121.5238,
-    floor: '9樓 / 12樓',
+    latitude: 25.0279034,
+    longitude: 121.5583043,
+    floor: '5樓 / 12樓',
   },
   {
     id: 'prop2',
@@ -81,10 +81,10 @@ export const getMockProperties = (language: Language): Property[] => {
 
   if (language === 'en') {
     // Prop 1 (Taipei)
-    baseProperties[0].address = 'No. 79-1, Section 2, Roosevelt Rd, Da\'an District, Taipei City';
+    baseProperties[0].address = 'No. 1, Ln. 15, Xin\'an St., Xinyi Dist., Taipei City';
     baseProperties[0].city = 'Taipei City';
-    baseProperties[0].district = 'Da\'an District';
-    baseProperties[0].floor = '9F / 12F';
+    baseProperties[0].district = 'Xinyi District';
+    baseProperties[0].floor = '5F / 12F';
     // Prop 2 (New Taipei)
     baseProperties[1].address = 'No. 100, Section 1, Wenhua Rd, Banqiao District, New Taipei City';
     baseProperties[1].city = 'New Taipei City';
@@ -104,10 +104,10 @@ export const getMockProperties = (language: Language): Property[] => {
     return baseProperties;
   }
   if (language === 'zh-CN') {
-    baseProperties[0].address = '台北市大安区罗斯福路二段79之1号';
+    baseProperties[0].address = '台北市信义区信安街15巷1号';
     baseProperties[0].city = '台北市';
-    baseProperties[0].district = '大安区';
-    baseProperties[0].floor = '9楼 / 12楼';
+    baseProperties[0].district = '信义区';
+    baseProperties[0].floor = '5楼 / 12楼';
 
     baseProperties[1].address = '新北市板桥区文化路一段100号';
     baseProperties[1].city = '新北市';
@@ -127,10 +127,10 @@ export const getMockProperties = (language: Language): Property[] => {
     return baseProperties;
   }
   if (language === 'ja') {
-    baseProperties[0].address = '台北市大安区羅斯福路二段79之1号';
+    baseProperties[0].address = '台北市信義区信安街15巷1号';
     baseProperties[0].city = '台北市';
-    baseProperties[0].district = '大安区';
-    baseProperties[0].floor = '9階 / 12階';
+    baseProperties[0].district = '信義区';
+    baseProperties[0].floor = '5階 / 12階';
 
     baseProperties[1].address = '新北市板橋区文化路一段100号';
     baseProperties[1].city = '新北市';

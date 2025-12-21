@@ -9,6 +9,8 @@ export default defineConfig({
   // We use './' to make paths relative to index.html.
   base: './',
   server: {
+    port: 5173,
+    open: true,
     proxy: {
       // 讓前端開發時的 /api 請求自動轉發到本地的 Node.js server (port 3000)
       '/api': {
