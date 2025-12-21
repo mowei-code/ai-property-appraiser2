@@ -38,6 +38,17 @@
   "structureSafety": "结构安全评估",
   "trafficRoutePlanning": "交通路线规划",
   "customValuation": "自订估价指令",
+  "customValuation_template_view_label": "🏙️ 城市景观溢价分析",
+  "customValuation_template_view_text": "请深度分析本物件的景观优势（如高楼层视野、城市夜景）对市场价值的具体加成比例。",
+  "customValuation_template_renovation_label": "🛠️ 翻新整修价值评估",
+  "customValuation_template_renovation_text": "假设投入 200 万进行现代化轻奢风格翻新，请预估装修后的房价增长与转售潜力。",
+  "customValuation_template_nimby_label": "🌿 周边嫌恶设施影响",
+  "customValuation_template_nimby_text": "分析周边 200 米内若存在（如电塔、加油站）等设施，对长期保值性与自住舒适度的影响。",
+  "customValuation_template_club_label": "💼 私人招待所转型建议",
+  "customValuation_template_club_text": "评估本物件转型为高端私人招待所或共享办公空间的租金效益与合规性分析。",
+  "changeValuationBasis": "更换估价基准",
+  "clickToSelectOthers": "点击此处选择其他估价模型",
+  "select": "更换",
   "premiumFeatureTooltip": "此功能仅限付费会员及管理员使用",
   "customActualPingSize": "自订实际坪数",
   "enterPingSizePlaceholder": "例如：32.5",
@@ -455,5 +466,6 @@
   "paypalClientIdNotSet": "PayPal Client ID 未设定",
   "configureInAdmin": "请至管理后台设定",
   "apiKeyDescription": "您的 API 金钥将安全地储存在您的浏览器中，不会被传送到我们的伺服器。",
-  "backToPlans": "选择其他方案"
+  "backToPlans": "选择其他方案",
+  "aiAnalysisInProgress": "AI 正在进行智慧分析，请稍候片刻"
 }

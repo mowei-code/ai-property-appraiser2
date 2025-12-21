@@ -38,6 +38,17 @@
   "structureSafety": "構造安全評価",
   "trafficRoutePlanning": "交通路線計画",
   "customValuation": "カスタム評価指示",
+  "customValuation_template_view_label": "🏙️ 景観プレミアム分析",
+  "customValuation_template_view_text": "この物件の景観の利点（高層階からの眺望、都市の夜景など）が市場価値に与える具体的な上乗せ比率を深く分析してください。",
+  "customValuation_template_renovation_label": "🛠️ 改装価値評価",
+  "customValuation_template_renovation_text": "モダンで豪華なスタイルへの改装に200万台湾ドルを投資した場合の、改装後の価格上昇と転売ポテンシャルを予測してください。",
+  "customValuation_template_nimby_label": "🌿 周辺嫌悪施設の影響",
+  "customValuation_template_nimby_text": "周辺200メートル以内に（送電塔、ガソリンスタンドなどの）施設が存在する場合の、長期的な資産価値と居住の快適性への影響を分析してください。",
+  "customValuation_template_club_label": "💼 プライベートクラブ転用",
+  "customValuation_template_club_text": "この物件を高級プライベートクラブやコワーキングスペースに転用した場合の賃料収益とコンプライアンス分析を評価してください。",
+  "changeValuationBasis": "評価基準を変更",
+  "clickToSelectOthers": "クリックして他の評価モデルを選択",
+  "select": "変更",
   "premiumFeatureTooltip": "この機能は有料会員および管理者専用です",
   "customActualPingSize": "カスタム坪数",
   "enterPingSizePlaceholder": "例：32.5",
@@ -437,5 +448,6 @@
   "paypalClientIdNotSet": "PayPalクライアントIDが設定されていません",
   "configureInAdmin": "管理パネルで設定してください",
   "apiKeyDescription": "APIキーはブラウザに安全に保存され、サーバーに送信されることはありません。",
-  "backToPlans": "他のプランを選択"
+  "backToPlans": "他のプランを選択",
+  "aiAnalysisInProgress": "AIがスマート分析を実行中です、少々お待ちください..."
 }

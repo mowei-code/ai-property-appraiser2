@@ -38,6 +38,17 @@
   "structureSafety": "Structure Safety",
   "trafficRoutePlanning": "Traffic Route Planning",
   "customValuation": "Custom Valuation",
+  "customValuation_template_view_label": "🏙️ City View Premium",
+  "customValuation_template_view_text": "Please analyze the premium value added by the view (e.g., high-floor city view, night view) for this property.",
+  "customValuation_template_renovation_label": "🛠️ Renovation Value",
+  "customValuation_template_renovation_text": "Assuming a budget of 2 million TWD for a modern luxury renovation, estimate the potential increase in property value and resale potential.",
+  "customValuation_template_nimby_label": "🌿 NIMBY Facility Impact",
+  "customValuation_template_nimby_text": "Analyze the impact on long-term value and living comfort if there are facilities like power towers or gas stations within 200 meters.",
+  "customValuation_template_club_label": "💼 Private Club Conversion",
+  "customValuation_template_club_text": "Evaluate the rental yield and compliance analysis for converting this property into a high-end private club or co-working space.",
+  "changeValuationBasis": "Change Valuation Basis",
+  "clickToSelectOthers": "Click to select other valuation models",
+  "select": "Select",
   "premiumFeatureTooltip": "This feature is exclusive to Paid Members and Administrators.",
   "customActualPingSize": "Custom Actual Size (Ping)",
   "enterPingSizePlaceholder": "e.g., 32.5",
@@ -451,5 +462,6 @@
   "paypalClientIdNotSet": "PayPal Client ID not configured",
   "configureInAdmin": "Please configure in Admin Panel",
   "apiKeyDescription": "Your API key is stored securely in your browser and is never sent to our servers.",
-  "backToPlans": "Choose another plan"
+  "backToPlans": "Choose another plan",
+  "aiAnalysisInProgress": "AI is performing smart analysis, please wait a moment..."
 }

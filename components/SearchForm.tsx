@@ -14,6 +14,8 @@ import { MapIcon } from './icons/MapIcon';
 import { ShoppingCartIcon } from './icons/ShoppingCartIcon';
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import { TruckIcon } from './icons/TruckIcon';
+import { XMarkIcon } from './icons/XMarkIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { formatNominatimAddress } from '../utils';
 import type { User } from '../types';
 import { SettingsContext } from '../contexts/SettingsContext';
@@ -77,6 +79,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
   const [customFloor, setCustomFloor] = useState('');
   const [customRequest, setCustomRequest] = useState('');
   const [showApiKeyWarning, setShowApiKeyWarning] = useState(false);
+  const [isBasisModalOpen, setIsBasisModalOpen] = useState(false);
 
   const userHasPermission = currentUser?.role === '管理員' || currentUser?.role === '付費用戶';
   const hasApiKey = !!getApiKey();
@@ -261,10 +264,10 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Desktop Grid View (Hidden on Mobile) */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {valuationReferences.map((ref) => {
               const isRestricted = restrictedReferences.includes(ref.value);
-              const isFreeTierOption = ref.value === 'comprehensiveMarketFactors';
               const isDisabledByPerms = isRestricted && !userHasPermission;
               const isDisabled = !hasApiKey || isDisabledByPerms;
               const isCustomAI = ref.value === 'customValuation';
@@ -298,7 +301,9 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                         ${isSelected
                         ? isCustomAI
                           ? 'bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.4)] ring-2 ring-indigo-500/50'
-                          : 'bg-white dark:bg-slate-800 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                          : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
+                            ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] ring-2 ring-emerald-500/20'
+                            : 'bg-white dark:bg-slate-800 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
                         : 'bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800'
                       }
                         ${isDisabled ? 'opacity-50 cursor-not-allowed filter grayscale bg-slate-100 dark:bg-slate-900/50' : ''}
@@ -309,7 +314,11 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                       <div className={`
                           p-2.5 rounded-xl transition-colors
                           ${isSelected
-                          ? isCustomAI ? 'bg-indigo-500 text-white' : 'bg-blue-500 text-white'
+                          ? isCustomAI
+                            ? 'bg-indigo-500 text-white'
+                            : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
+                              ? 'bg-white/20 text-white backdrop-blur-sm'
+                              : 'bg-blue-500 text-white'
                           : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 group-hover:bg-slate-200'
                         }
                         `}>
@@ -319,7 +328,11 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                         <div className={`
                             text-base font-bold mb-0.5 flex items-center gap-2
                             ${isSelected
-                            ? isCustomAI ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                            ? isCustomAI
+                              ? 'text-white'
+                              : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
+                                ? 'text-white'
+                                : 'text-blue-600 dark:text-blue-400'
                             : 'text-slate-900 dark:text-white'
                           }
                           `}>
@@ -333,7 +346,11 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                         <p className={`
                             text-xs leading-relaxed line-clamp-2
                             ${isSelected
-                            ? isCustomAI ? 'text-indigo-200' : 'text-slate-500 dark:text-slate-400'
+                            ? isCustomAI
+                              ? 'text-indigo-200'
+                              : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
+                                ? 'text-emerald-100'
+                                : 'text-slate-500 dark:text-slate-400'
                             : 'text-slate-500 dark:text-slate-400'
                           }
                           `}>
@@ -353,6 +370,165 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                 </div>
               )
             })}
+          </div>
+
+          {/* Mobile Collapsible View */}
+          <div className="block sm:hidden space-y-3">
+            {/* Selected Status Card (Preserves Visual State) */}
+            <div className={`
+              relative p-4 rounded-2xl border-2 transition-all duration-300
+              ${reference === 'customValuation'
+                ? 'bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500 shadow-lg ring-2 ring-indigo-500/50'
+                : (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                  ? 'bg-emerald-500 border-emerald-400 shadow-lg ring-2 ring-emerald-500/20'
+                  : 'bg-white dark:bg-slate-800 border-blue-500 shadow-md'
+              }
+            `}>
+              <div className="flex items-center gap-4 overflow-hidden">
+                <div className={`
+                  p-2.5 rounded-xl flex-shrink-0
+                  ${reference === 'customValuation'
+                    ? 'bg-indigo-500 text-white'
+                    : (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                      ? 'bg-white/20 text-white backdrop-blur-sm'
+                      : 'bg-blue-500 text-white'
+                  }
+                `}>
+                  {(() => {
+                    const Icon = valuationReferences.find(r => r.value === reference)?.icon || GlobeAltIcon;
+                    return <Icon className="h-6 w-6" />;
+                  })()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className={`text-base font-bold truncate 
+                    ${reference === 'customValuation' || (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                      ? 'text-white'
+                      : 'text-slate-900 dark:text-white'
+                    }
+                  `}>
+                    {valuationReferences.find(r => r.value === reference)?.label}
+                  </div>
+                  <div className={`text-xs line-clamp-2 leading-relaxed whitespace-normal
+                    ${reference === 'customValuation'
+                      ? 'text-indigo-200'
+                      : (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                        ? 'text-emerald-100'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {valuationReferences.find(r => r.value === reference)?.desc}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Explicit Change Button & Description */}
+            <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+              <div className="flex-1 mr-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {t('changeValuationBasis')}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('clickToSelectOthers')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBasisModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm transition-colors"
+                aria-label={t('changeValuationBasis')}
+              >
+                <span>{t('select')}</span>
+                <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Mobile Selection Modal */}
+            {isBasisModalOpen && (
+              <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-50 dark:bg-slate-900 animate-fade-in">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm z-10">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {t('valuationBasis')}
+                  </h3>
+                  <button
+                    onClick={() => setIsBasisModalOpen(false)}
+                    className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+
+                {/* Modal Content - Scrollable List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {valuationReferences.map((ref) => {
+                    const isRestricted = restrictedReferences.includes(ref.value);
+                    const isDisabledByPerms = isRestricted && !userHasPermission;
+                    const isDisabled = !hasApiKey || isDisabledByPerms;
+                    const isCustomAI = ref.value === 'customValuation';
+                    const isSelected = reference === ref.value;
+                    const Icon = ref.icon;
+
+                    return (
+                      <button
+                        key={ref.value}
+                        type="button"
+                        onClick={() => {
+                          if (!isDisabled) {
+                            setReference(ref.value);
+                            setIsBasisModalOpen(false);
+                          }
+                        }}
+                        disabled={isDisabled}
+                        className={`
+                          w-full text-left relative p-4 rounded-xl border-2 transition-all duration-200
+                          ${isSelected
+                            ? isCustomAI
+                              ? 'bg-indigo-900/10 border-indigo-500'
+                              : 'bg-blue-50 dark:bg-blue-900/10 border-blue-500'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                          }
+                          ${isDisabled ? 'opacity-50 cursor-not-allowed grayscale' : 'active:scale-[0.98]'}
+                        `}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className={`
+                            p-2 rounded-lg flex-shrink-0
+                            ${isSelected
+                              ? isCustomAI ? 'bg-indigo-500 text-white' : 'bg-blue-500 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                            }
+                          `}>
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white mb-0.5">
+                              {ref.label}
+                              {isDisabledByPerms && (
+                                <span className="text-xs px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded text-normal font-normal">
+                                  LOCKED
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                              {ref.desc}
+                            </p>
+                          </div>
+                          {isSelected && (
+                            <div className="flex-shrink-0 text-blue-500">
+                              <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Bottom spacer for safe area */}
+                  <div className="h-8"></div>
+                </div>
+              </div>
+            )}
           </div>
         </fieldset>
 
@@ -428,10 +604,10 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
             />
             <div className="mt-4 flex flex-wrap gap-2">
               {[
-                { label: '🏙️ 城市景觀溢價分析', text: '請深度分析本物件的景觀優勢（如高樓層視野、城市夜景）對其市場價值的具體加成比例。' },
-                { label: '🛠️ 翻新整修價值評估', text: '假設投入 200 萬進行現代化輕奢風格翻新，請預估裝修後的房價增長與轉售潛力。' },
-                { label: '🌿 周邊嫌惡設施影響', text: '分析周邊 200 公尺內若存在（如電塔、加油站）等設施，對長期保值性與自住舒適度的影響。' },
-                { label: '💼 私人招待所轉型建議', text: '評估本物件轉型為高端私人招待所或共享辦公空間的租金效益與合規性分析。' }
+                { label: t('customValuation_template_view_label'), text: t('customValuation_template_view_text') },
+                { label: t('customValuation_template_renovation_label'), text: t('customValuation_template_renovation_text') },
+                { label: t('customValuation_template_nimby_label'), text: t('customValuation_template_nimby_text') },
+                { label: t('customValuation_template_club_label'), text: t('customValuation_template_club_text') }
               ].map((template) => (
                 <button
                   key={template.label}

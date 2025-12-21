@@ -38,6 +38,17 @@
   "structureSafety": "結構安全評估",
   "trafficRoutePlanning": "交通路線規劃",
   "customValuation": "自訂估價指令",
+  "customValuation_template_view_label": "🏙️ 城市景觀溢價分析",
+  "customValuation_template_view_text": "請深度分析本物件的景觀優勢（如高樓層視野、城市夜景）對其市場價值的具體加成比例。",
+  "customValuation_template_renovation_label": "🛠️ 翻新整修價值評估",
+  "customValuation_template_renovation_text": "假設投入 200 萬進行現代化輕奢風格翻新，請預估裝修後的房價增長與轉售潛力。",
+  "customValuation_template_nimby_label": "🌿 周邊嫌惡設施影響",
+  "customValuation_template_nimby_text": "分析周邊 200 公尺內若存在（如電塔、加油站）等設施，對長期保值性與自住舒適度的影響。",
+  "customValuation_template_club_label": "💼 私人招待所轉型建議",
+  "customValuation_template_club_text": "評估本物件轉型為高端私人招待所或共享辦公空間的租金效益與合規性分析。",
+  "changeValuationBasis": "更換估價基準",
+  "clickToSelectOthers": "點擊此處選擇其他估價模型",
+  "select": "更換",
   "premiumFeatureTooltip": "此功能僅限付費會員及管理員使用",
   "customActualPingSize": "自訂實際坪數",
   "enterPingSizePlaceholder": "例如：32.5",
@@ -457,5 +468,6 @@
   "paypalClientIdNotSet": "PayPal Client ID 未設定",
   "configureInAdmin": "請至管理後台設定",
   "apiKeyDescription": "您的 API 金鑰將安全地儲存在您的瀏覽器中，不會被傳送到我們的伺服器。",
-  "backToPlans": "選擇其他方案"
+  "backToPlans": "選擇其他方案",
+  "aiAnalysisInProgress": "AI 正在進行智慧分析，請稍候片刻"
 }
