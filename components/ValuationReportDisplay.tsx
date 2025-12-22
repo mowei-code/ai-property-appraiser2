@@ -35,7 +35,7 @@ interface ValuationReportDisplayProps {
     isValuating: boolean;
     onOpenHistory: () => void;
     currentUser: User | null;
-    onOpenSettings: () => void;
+    onOpenSettings: (tab?: 'preferences' | 'upgrade') => void;
     loadingMessage: string;
 }
 
@@ -301,7 +301,7 @@ const ScenarioAnalysis: React.FC<ScenarioAnalysisProps> = ({ property, valuation
                             <span>{analysisError}</span>
                             {analysisError === t('apiKeyWarning') && (
                                 <button
-                                    onClick={onOpenSettings}
+                                    onClick={() => onOpenSettings('preferences')}
                                     className="text-amber-700 dark:text-amber-400 font-bold underline ml-2 hover:text-amber-900 dark:hover:text-amber-200"
                                 >
                                     {t('settings')}
@@ -446,7 +446,7 @@ export const ValuationReportDisplay: React.FC<ValuationReportDisplayProps> = ({
                         <p className="text-sm opacity-90">{t('apiKeySetupPrompt')}</p>
                     </div>
                     <button
-                        onClick={onOpenSettings}
+                        onClick={() => onOpenSettings('preferences')}
                         className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all whitespace-nowrap"
                     >
                         {t('settings')}
@@ -477,7 +477,7 @@ export const ValuationReportDisplay: React.FC<ValuationReportDisplayProps> = ({
                         <div className="text-center flex-shrink-0">
                             <p className="text-xs text-blue-600 dark:text-blue-300 mb-1.5">{t('unlockAdvancedFeatures')}</p>
                             <button
-                                onClick={onOpenSettings}
+                                onClick={() => onOpenSettings('upgrade')}
                                 className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full shadow-md shadow-amber-500/30 transition-all hover:-translate-y-0.5 text-sm flex items-center gap-1 mx-auto"
                             >
                                 <SparklesIcon className="h-4 w-4" />

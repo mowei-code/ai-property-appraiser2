@@ -571,7 +571,7 @@ const AppContent: React.FC = () => {
             onOpenMap={() => setIsMapOpen(true)}
             onOpenInstructionManual={() => setInstructionManualOpen(true)}
             currentUser={currentUser}
-            onOpenSettings={() => setSettingsModalOpen(true)}
+            onOpenSettings={(tab) => setSettingsModalOpen(true, tab)}
             loadingMessage={loadingMessage}
           />
         </main>

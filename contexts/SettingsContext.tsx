@@ -65,7 +65,8 @@ const SYSTEM_KEYS: (keyof Settings)[] = [
 interface SettingsContextType {
   settings: Settings;
   isSettingsModalOpen: boolean;
-  setSettingsModalOpen: (isOpen: boolean) => void;
+  settingsModalTab: 'preferences' | 'upgrade';
+  setSettingsModalOpen: (isOpen: boolean, tab?: 'preferences' | 'upgrade') => void;
   saveSettings: (newSettings: Partial<Settings>) => void;
   getApiKey: () => string | null;
   t: (key: string, replacements?: Record<string, string>) => string;
@@ -77,9 +78,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const { currentUser } = useContext(AuthContext);
 
   const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpenState] = useState(false);
+  const [settingsModalTab, setSettingsModalTab] = useState<'preferences' | 'upgrade'>('preferences');
   const [translations, setTranslations] = useState(defaultTranslations);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Wrapper to allow setting tab
+  const setSettingsModalOpen = (isOpen: boolean, tab: 'preferences' | 'upgrade' = 'preferences') => {
+    setIsSettingsModalOpenState(isOpen);
+    if (isOpen) {
+      setSettingsModalTab(tab);
+    }
+  };
 
   // Helper to merge system settings
   const mergeSystemSettings = (current: Settings, system: any): Settings => {
@@ -277,7 +287,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [settings.language, translations]);
 
   return (
-    <SettingsContext.Provider value={{ settings, isSettingsModalOpen, setSettingsModalOpen, saveSettings, getApiKey, t }}>
+    <SettingsContext.Provider value={{ settings, isSettingsModalOpen, settingsModalTab, setSettingsModalOpen, saveSettings, getApiKey, t }}>
       {children}
     </SettingsContext.Provider>
   );

@@ -5,6 +5,7 @@ import { AuthContext } from '../contexts/AuthContext';
 import { SettingsContext } from '../contexts/SettingsContext';
 import { UserCircleIcon } from './icons/UserCircleIcon';
 import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import { ArrowLeftOnRectangleIcon } from './icons/ArrowLeftOnRectangleIcon';
 
@@ -52,6 +53,17 @@ export const Header: React.FC<HeaderProps> = ({ className = '' }) => {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                 </span>
+              </button>
+            )}
+
+            {/* Upgrade Button - Direct Link */}
+            {(currentUser.role === '一般用戶') && (
+              <button
+                onClick={() => setSettingsModalOpen(true, 'upgrade')}
+                className="p-2.5 text-orange-600 dark:text-orange-400 hover:text-orange-700 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-full transition-all duration-200 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500 group"
+                title={t('upgradeAccount')}
+              >
+                <SparklesIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
               </button>
             )}
 

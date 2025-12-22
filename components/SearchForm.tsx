@@ -252,7 +252,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                   <>
                     <button
                       type="button"
-                      onClick={() => setSettingsModalOpen(true)}
+                      onClick={() => setSettingsModalOpen(true, 'upgrade')}
                       className="text-blue-600 dark:text-blue-400 hover:underline font-medium mx-1"
                     >
                       升級為付費會員
@@ -302,7 +302,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                         ? isCustomAI
                           ? 'bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.4)] ring-2 ring-indigo-500/50'
                           : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
-                            ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] ring-2 ring-emerald-500/20'
+                            ? 'bg-white dark:bg-slate-800 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
                             : 'bg-white dark:bg-slate-800 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
                         : 'bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800'
                       }
@@ -317,7 +317,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                           ? isCustomAI
                             ? 'bg-indigo-500 text-white'
                             : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
-                              ? 'bg-white/20 text-white backdrop-blur-sm'
+                              ? 'bg-emerald-500 text-white'
                               : 'bg-blue-500 text-white'
                           : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 group-hover:bg-slate-200'
                         }
@@ -331,7 +331,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                             ? isCustomAI
                               ? 'text-white'
                               : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
-                                ? 'text-white'
+                                ? 'text-emerald-600 dark:text-emerald-400'
                                 : 'text-blue-600 dark:text-blue-400'
                             : 'text-slate-900 dark:text-white'
                           }
@@ -349,7 +349,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                             ? isCustomAI
                               ? 'text-indigo-200'
                               : (ref.value === 'comprehensiveMarketFactors' && hasApiKey)
-                                ? 'text-emerald-100'
+                                ? 'text-slate-500 dark:text-slate-400'
                                 : 'text-slate-500 dark:text-slate-400'
                             : 'text-slate-500 dark:text-slate-400'
                           }
@@ -380,7 +380,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
               ${reference === 'customValuation'
                 ? 'bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500 shadow-lg ring-2 ring-indigo-500/50'
                 : (reference === 'comprehensiveMarketFactors' && hasApiKey)
-                  ? 'bg-emerald-500 border-emerald-400 shadow-lg ring-2 ring-emerald-500/20'
+                  ? 'bg-white dark:bg-slate-800 border-emerald-500 shadow-md'
                   : 'bg-white dark:bg-slate-800 border-blue-500 shadow-md'
               }
             `}>
@@ -390,7 +390,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                   ${reference === 'customValuation'
                     ? 'bg-indigo-500 text-white'
                     : (reference === 'comprehensiveMarketFactors' && hasApiKey)
-                      ? 'bg-white/20 text-white backdrop-blur-sm'
+                      ? 'bg-emerald-500 text-white'
                       : 'bg-blue-500 text-white'
                   }
                 `}>
@@ -401,9 +401,11 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className={`text-base font-bold truncate 
-                    ${reference === 'customValuation' || (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                    ${reference === 'customValuation'
                       ? 'text-white'
-                      : 'text-slate-900 dark:text-white'
+                      : (reference === 'comprehensiveMarketFactors' && hasApiKey)
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-900 dark:text-white'
                     }
                   `}>
                     {valuationReferences.find(r => r.value === reference)?.label}
@@ -412,7 +414,7 @@ export const SearchForm: React.FC<SearchFormProps> = ({ onSearch, onLocationSele
                     ${reference === 'customValuation'
                       ? 'text-indigo-200'
                       : (reference === 'comprehensiveMarketFactors' && hasApiKey)
-                        ? 'text-emerald-100'
+                        ? 'text-slate-500 dark:text-slate-400'
                         : 'text-slate-500 dark:text-slate-400'
                     }
                   `}>
