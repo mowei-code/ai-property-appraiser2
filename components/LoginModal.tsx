@@ -175,14 +175,15 @@ export const LoginModal: React.FC = () => {
                 </div>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('email')} className={inputClass} required disabled={!isSupabaseConfigured} />
 
+                {successMsg && (
+                  <div className="text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-900/20 p-3 rounded border border-green-200 dark:border-green-800">
+                    {successMsg}
+                  </div>
+                )}
+
                 {error && (
                   <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded border border-red-200 dark:border-red-800">
                     {error}
-                  </div>
-                )}
-                {isLoading && (
-                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl">
-                    <LoadingOverlay message={t('analyzing')} isFullScreen={false} className="min-h-0 bg-transparent border-none shadow-none p-0" />
                   </div>
                 )}
 

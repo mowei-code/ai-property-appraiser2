@@ -180,46 +180,21 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
 
     // 2. Generate Recovery Link
-    // Correctly handle Localhost vs Production logic
-    let redirectBase = req.headers.origin;
-
-    // Fallback if origin is missing (common in some proxy setups)
-    if (!redirectBase) {
-      redirectBase = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
-    }
-
-    // DEBUG: Force localhost if we are running locally to avoid Vercel redirect
-    if (redirectBase.includes('localhost')) {
-      // Ensure protocol is http for localhost
-      if (redirectBase.startsWith('https://')) {
-        redirectBase = redirectBase.replace('https://', 'http://');
-      }
-    }
+    const origin = req.headers.origin || 'http://localhost:5173';
 
     console.log(`[Server] Headers Origin: ${req.headers.origin}`);
-    console.log(`[Server] Computed Redirect Base: ${redirectBase}`);
+    console.log(`[Server] Computed Origin: ${origin}`);
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: email,
-      options: { redirectTo: `${redirectBase}/?reset=true` }
+      options: { redirectTo: `${origin}/?reset=true` }
     });
 
     if (linkError) throw linkError;
-    let recoveryLink = linkData.properties.action_link;
+    const recoveryLink = linkData.properties.action_link;
 
-    // HACK: Supabase might have ignored our redirectTo param if not in whitelist.
-    // We force-rewrite it here so the user at least gets the correct link in email.
-    // If Supabase API blocks the redirect on click, the user will see a specific error then.
-    if (redirectBase && redirectBase.includes('localhost')) {
-      const urlObj = new URL(recoveryLink);
-      urlObj.searchParams.set('redirect_to', `${redirectBase}/?reset=true`);
-      recoveryLink = urlObj.toString();
-      // Also fix the double slash issue if present from Supabase config
-      recoveryLink = recoveryLink.replace('//.vercel.app', '.vercel.app');
-    }
-
-    console.log(`[Server] Recovery Link Generated (Rewritten): ${recoveryLink}`);
+    console.log(`[Server] Recovery Link Generated: ${recoveryLink}`);
 
     // 3. Send Email
     const transporter = nodemailer.createTransport({
