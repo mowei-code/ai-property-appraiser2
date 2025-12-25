@@ -4,7 +4,7 @@ import type { Property, Filters, Language } from './types';
 // Declare the global variable injected by Vite
 declare const __BUILD_DATE__: string;
 
-export const APP_VERSION = "v.1120beta002";
+export const APP_VERSION = "v.1126";
 
 // Use the injected build date if available (production build), otherwise use a fallback date (development)
 export const APP_RELEASE_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : new Date().toISOString().split('T')[0];

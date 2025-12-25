@@ -17,6 +17,7 @@ import { ArrowUpTrayIcon } from './icons/ArrowUpTrayIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
 
 export const AdminPanel: React.FC = () => {
     const { users, addUser, updateUser, deleteUser, refreshUsers, setAdminPanelOpen, currentUser, forceReconnect } = useContext(AuthContext);
@@ -36,7 +37,7 @@ export const AdminPanel: React.FC = () => {
     const [success, setSuccess] = useState('');
     const [importStatus, setImportStatus] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
-
+    const [activeTab, setActiveTab] = useState<'users' | 'configuration'>('users');
     const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
     // Settings State
@@ -81,7 +82,11 @@ export const AdminPanel: React.FC = () => {
             setName(isEditing.name || '');
             setPhone(isEditing.phone || '');
             if (isEditing.subscriptionExpiry) {
-                setExpiryDate(new Date(isEditing.subscriptionExpiry).toISOString().split('T')[0]);
+                try {
+                    setExpiryDate(new Date(isEditing.subscriptionExpiry).toISOString().split('T')[0]);
+                } catch (e) {
+                    setExpiryDate('');
+                }
             } else {
                 setExpiryDate('');
             }
@@ -120,25 +125,41 @@ export const AdminPanel: React.FC = () => {
         e.preventDefault();
         setError('');
         setSuccess('');
-        let result;
+        let finalUserForEmail: User | null = null;
+
         if (isAdding) {
             result = await addUser({ email, password, role, name, phone });
+            if (result.success) {
+                finalUserForEmail = {
+                    email,
+                    role,
+                    name,
+                    phone,
+                    subscriptionExpiry: role === '付費用戶' && !expiryDate ?
+                        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() :
+                        (expiryDate ? new Date(expiryDate).toISOString() : null)
+                } as User;
+            }
         } else if (isEditing) {
             const updatedData: Partial<User> = { role, name, phone };
             if (password) updatedData.password = password;
-
-            if (expiryDate) {
-                updatedData.subscriptionExpiry = new Date(expiryDate).toISOString();
-            } else {
-                updatedData.subscriptionExpiry = null;
-            }
+            updatedData.subscriptionExpiry = expiryDate ? new Date(expiryDate).toISOString() : null;
 
             result = await updateUser(isEditing.email, updatedData);
+            if (result.success) {
+                finalUserForEmail = { ...isEditing, ...updatedData } as User;
+            }
         } else { return; }
 
         if (result.success) {
             setSuccess(t(result.messageKey));
             await refreshUsers();
+
+            // Automated Email Notification (Only for new users)
+            if (finalUserForEmail && isAdding) {
+                triggerAdminActionEmail(finalUserForEmail, 'welcome', expiryDate);
+            }
+
             if (isAdding) resetForm();
         } else {
             setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
@@ -162,32 +183,95 @@ export const AdminPanel: React.FC = () => {
         setTimeout(() => setConfigSuccess(''), 3000);
     };
 
+    const triggerAdminActionEmail = async (user: User, action: 'welcome' | 'update' | 'delete', customExpiryDate?: string) => {
+        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return;
+        }
+
+        let subjectKey = '';
+        let bodyKey = '';
+
+        switch (action) {
+            case 'welcome':
+                subjectKey = 'welcomeEmailSubject';
+                bodyKey = 'welcomeEmailBody';
+                break;
+            case 'update':
+                subjectKey = 'updateEmailSubject';
+                bodyKey = 'updateEmailBody';
+                break;
+            case 'delete':
+                subjectKey = 'deleteEmailSubject';
+                bodyKey = 'deleteEmailBody';
+                break;
+        }
+
+        const appTitle = t('appTitle');
+        const roleName = t(user.role);
+
+        let expiry = '-';
+        try {
+            if (customExpiryDate) {
+                const date = new Date(customExpiryDate);
+                if (!isNaN(date.getTime())) {
+                    expiry = date.toLocaleDateString();
+                }
+            } else if (user.subscriptionExpiry) {
+                const date = new Date(user.subscriptionExpiry);
+                if (!isNaN(date.getTime())) {
+                    expiry = date.toLocaleDateString();
+                }
+            }
+        } catch (e) {
+            console.warn("Date parsing failed in email trigger:", e);
+        }
+
+        const subject = t(subjectKey);
+        const text = t(bodyKey)
+            .replace('{{name}}', user.name || user.email)
+            .replace('{{email}}', user.email)
+            .replace('{{role}}', roleName)
+            .replace('{{expiry}}', expiry)
+            .replace('{{appTitle}}', `${appTitle}`);
+
+        try {
+            const result = await sendEmail({
+                smtpHost: settings.smtpHost,
+                smtpPort: settings.smtpPort,
+                smtpUser: settings.smtpUser,
+                smtpPass: settings.smtpPass,
+                to: user.email,
+                subject,
+                text
+            });
+
+            if (result.success) {
+                console.log(`Auto-email (${action}) sent to ${user.email}`);
+                // Optional: Show a subtle toast or log, avoiding cluttering the main success message
+            } else {
+                console.error("Auto email failed:", result.error);
+                setError(t('autoEmailFailed', { error: result.error }));
+            }
+        } catch (e) {
+            console.error("Auto email exception:", e);
+        }
+    };
+
     const handleSendRealEmail = async () => {
         if (!isEditing) return;
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            setError(t('paypalNotConfigured')); // Reuse or create new key if needed, but the image shows missing SMTP info notice
+            setError(t('paypalNotConfigured'));
             return;
         }
         setSendingEmail(true);
         setSuccess(''); setError('');
 
-        const subject = `[AI房產估價師] ${t('about')} - ${t('adminPanel')}`;
-        const text = `親愛的 ${isEditing.name || t('generalUser')} ${t('welcomeMessageTitle')},\n\n您的帳號狀態已更新為：${t(isEditing.role)}\n訂閱到期日：${isEditing.subscriptionExpiry ? new Date(isEditing.subscriptionExpiry).toLocaleDateString() : '-'}\n\n--\n${t('appTitle')}`;
+        // Construct a fresh user object from current form state for accurate email content
+        const currentUpdatedUser: User = { ...isEditing, role, name, phone } as User;
 
-        const result = await sendEmail({
-            smtpHost: settings.smtpHost,
-            smtpPort: settings.smtpPort,
-            smtpUser: settings.smtpUser,
-            smtpPass: settings.smtpPass,
-            to: isEditing.email,
-            cc: settings.smtpUser,
-            subject,
-            text
-        });
-
+        await triggerAdminActionEmail(currentUpdatedUser, 'update', expiryDate);
         setSendingEmail(false);
-        if (result.success) setSuccess(`郵件已發送至 ${isEditing.email}`);
-        else setError(`發送失敗: ${result.error}`);
+        setSuccess(t('autoEmailSent', { email: isEditing.email }));
     };
 
     const handleSimulatePaymentForAdmin = async () => {
@@ -207,6 +291,13 @@ export const AdminPanel: React.FC = () => {
 
     const confirmDelete = async () => {
         if (!userToDelete) return;
+
+        // Find user details before deletion for email
+        const user = users.find(u => u.email === userToDelete);
+        if (user) {
+            await triggerAdminActionEmail(user, 'delete');
+        }
+
         const result = await deleteUser(userToDelete);
         if (result.success) { setSuccess(t(result.messageKey)); if (isEditing?.email === userToDelete) resetForm(); }
         else { setError(t(result.messageKey) + (result.message ? `: ${result.message}` : '')); }
@@ -234,9 +325,14 @@ export const AdminPanel: React.FC = () => {
 
         if (result.success) {
             setSuccess(t('subscriptionExtended', { date: newExpiryDate.toLocaleDateString() }));
-            setIsEditing({ ...isEditing, role: '付費用戶', subscriptionExpiry: isoDate });
+
+            // Auto Email for Quick Subscription
+            const updatedUser = { ...isEditing, role: '付費用戶', subscriptionExpiry: isoDate } as User;
+            setIsEditing(updatedUser);
             setRole('付費用戶');
             setExpiryDate(isoDate.split('T')[0]);
+
+            triggerAdminActionEmail(updatedUser, 'update', isoDate.split('T')[0]);
 
             await refreshUsers();
         } else {
@@ -360,167 +456,298 @@ export const AdminPanel: React.FC = () => {
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-3"><ShieldCheckIcon className="h-8 w-8 text-blue-600" />{t('adminPanel')}</h2>
                     <button onClick={() => setAdminPanelOpen(false)} className="p-2 rounded-full hover:bg-gray-200"><XMarkIcon className="h-6 w-6" /></button>
                 </div>
-                <div className="flex flex-col md:flex-row h-full overflow-hidden">
-                    {/* Left Sidebar */}
-                    <div className="w-full md:w-64 bg-gray-50 dark:bg-gray-800 border-r p-4 overflow-y-auto">
-                        <div className="space-y-8">
-                            <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-xl">
-                                <h3 className="font-bold mb-3 flex items-center gap-2"><Cog6ToothIcon className="h-5 w-5" />{t('systemConfiguration')}</h3>
+                <div className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'users'
+                            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                    >
+                        {t('userList')}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('configuration')}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'configuration'
+                            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                    >
+                        {t('systemConfiguration')}
+                    </button>
+                </div>
 
-                                {/* Database Status */}
-                                <div className="mb-4 p-3 rounded-lg border bg-green-100 border-green-200 text-green-800">
-                                    <div className="flex items-center gap-2 font-bold text-sm">
-                                        <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
-                                        <span>{t('cloudDatabaseStatus')}</span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between items-center mb-1">
-                                            <label className="text-xs font-semibold text-gray-500">PayPal Client ID</label>
-                                            <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">{t('getPaypalClientId')} <LinkIcon className="h-3 w-3" /></a>
-                                        </div>
-                                        <input type="text" value={paypalClientId} onChange={e => setPaypalClientId(e.target.value.trim())} className="w-full border p-1 rounded text-sm" />
-                                    </div>
-                                    <div className="border-t pt-2">
-                                        <h4 className="text-xs font-bold text-gray-500 mb-2">{t('smtpSettings')}</h4>
-                                        <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpHostLabel')} />
-                                        <input type="text" value={smtpPort} onChange={e => setSmtpPort(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpPortLabel')} />
-                                        <input type="text" value={smtpUser} onChange={e => setSmtpUser(e.target.value.trim())} className="w-full border p-1 rounded text-sm mb-1" placeholder={t('smtpUserLabel')} />
-                                        <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value.trim())} className="w-full border p-1 rounded text-sm" placeholder={t('smtpPassLabel')} />
-                                    </div>
-                                    <div className="border-t pt-2">
-                                        <h4 className="text-xs font-bold text-gray-500 mb-2">{t('copyrightManagement')}</h4>
-                                        <div className="space-y-2">
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">{t('publishUnit')}</label>
-                                                <input type="text" value={publishUnit} onChange={e => setPublishUnit(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="Mazylab Studio" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">{t('publishVersion')}</label>
-                                                <input type="text" value={publishVersion} onChange={e => setPublishVersion(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="v.1.120" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">{t('contactEmail')}</label>
-                                                <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="contact@example.com" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div><label className="text-xs font-semibold text-gray-500">{t('adminNotificationEmailLabel')}</label><input type="email" value={systemEmail} onChange={e => setSystemEmail(e.target.value.trim())} className="w-full border p-1 rounded text-sm" /></div>
-                                    <button onClick={handleSaveConfig} className="w-full bg-gray-800 text-white text-sm font-bold rounded py-2">{t('saveConfiguration')}</button>
-                                    <button onClick={handleSimulatePaymentForAdmin} className="w-full bg-amber-600 text-white text-xs font-bold rounded py-2 mt-2">{t('simulatePayment')}</button>
-                                    {configSuccess && <p className="text-xs text-green-600 text-center">{configSuccess}</p>}
-                                </div>
-                            </div>
-
-                            <div className="bg-blue-50 p-4 rounded-xl">
-                                <h3 className="font-bold text-blue-800 mb-2">{t('dataAndBackup')}</h3>
-
-                                <div className="mb-4 pb-4 border-b border-blue-200">
-                                    <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded py-2 mb-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                                        <ArrowDownTrayIcon className="h-4 w-4" /> {t('backupSystem')}
-                                    </button>
-                                    <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
-                                    <button onClick={() => restoreInputRef.current?.click()} className="w-full bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 text-sm rounded py-2 flex items-center justify-center gap-2 shadow-sm transition-colors">
-                                        <ArrowUpTrayIcon className="h-4 w-4" /> {t('restoreSystem')}
-                                    </button>
-                                </div>
-
-                                <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
-                                <button onClick={() => fileInputRef.current?.click()} className="w-full bg-blue-600 text-white text-sm rounded py-2 mb-2">{t('importCsv')}</button>
-                                <button onClick={handleClearData} className="w-full border border-red-200 text-red-600 text-sm rounded py-2">{t('clearImportedData')}</button>
-                                {importStatus && <p className="text-xs text-blue-700 text-center mt-2 font-bold">{importStatus}</p>}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Content */}
+                <div className="flex flex-col h-full overflow-hidden">
+                    {/* Main Content Area */}
                     <div className="flex-grow p-6 overflow-y-auto bg-white dark:bg-gray-900">
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <h3 className="text-xl font-bold">{t('userList')}</h3>
-                                <button
-                                    onClick={handleRefreshUsers}
-                                    disabled={isRefreshing}
-                                    className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
-                                    title="重新整理列表"
-                                >
-                                    <ArrowPathIcon className={`h-5 w-5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
-                                </button>
-                            </div>
-                            <div className="flex gap-3"><button onClick={handleExportCsv} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">{t('exportCsv')}</button><button onClick={handleAddNew} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">+ {t('addUser')}</button></div>
-                        </div>
-                        <div className="overflow-x-auto rounded-xl border mb-6"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-4 text-sm">Email</th><th className="p-4 text-sm">{t('nameLabel')}</th><th className="p-4 text-sm">{t('roleLabel')}</th><th className="p-4 text-sm">{t('expiryLabel')}</th><th className="p-4 text-sm text-right">{t('actionLabel')}</th></tr></thead><tbody>{users.map(u => (<tr key={u.email} className="border-t"><td className="p-4 text-sm">{u.email}</td><td className="p-4 text-sm">{u.name}</td><td className="p-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{t(u.role)}</span></td><td className="p-4 text-sm">{u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString() : '-'}</td><td className="p-4 text-right"><button onClick={() => handleEdit(u)} className="text-blue-600 mr-2">{t('edit')}</button>
-                            {u.email === currentUser?.email ? (
-                                <span className="text-gray-400 cursor-not-allowed" title={t('cannotDeleteSelf')}>{t('delete')}</span>
-                            ) : (
-                                <button onClick={() => initiateDelete(u.email)} className="text-red-600">{t('delete')}</button>
-                            )}
-                        </td></tr>))}</tbody></table></div>
-                        {(isEditing || isAdding) && (
-                            <div className="bg-gray-50 p-6 rounded-xl border">
-                                <h3 className="font-bold mb-4">{isAdding ? t('addUserTitle') : t('editUserTitle')}</h3>
-                                <form onSubmit={handleSubmit} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
-                                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="w-full border p-2 rounded" required />
+                        {activeTab === 'configuration' ? (
+                            <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800 dark:text-white">
+                                            <Cog6ToothIcon className="h-5 w-5 text-blue-500" />
+                                            {t('systemConfiguration')}
+                                        </h3>
+
+                                        {/* Database Status */}
+                                        <div className="mb-6 p-4 rounded-xl border bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800 text-green-800 dark:text-green-300">
+                                            <div className="flex items-center gap-3 font-bold text-sm">
+                                                <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
+                                                <span>{t('cloudDatabaseStatus')}</span>
+                                            </div>
                                         </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('password')}</label>
-                                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isEditing ? t('passwordPlaceholderEdit') : t('passwordPlaceholderAdd')} className="w-full border p-2 rounded" />
-                                        </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('name')}</label>
-                                            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('name')} className="w-full border p-2 rounded" required />
-                                        </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('phone')}</label>
-                                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('phone')} className="w-full border p-2 rounded" required />
-                                        </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">{t('role')}</label>
-                                            <select value={role} onChange={e => handleRoleChange(e.target.value as UserRole)} className="w-full border p-2 rounded bg-white">
-                                                {roles.map(r => <option key={r} value={r}>{t(r)}</option>)}
-                                            </select>
-                                        </div>
-                                        {isEditing && (
-                                            <div className="col-span-1">
-                                                <label className="block text-xs font-bold text-gray-500 mb-1">{t('expiryLabel')}</label>
+
+                                        <div className="space-y-5">
+                                            <div>
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-400">PayPal Client ID</label>
+                                                    <a href="https://developer.paypal.com/dashboard/applications" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">{t('getPaypalClientId')} <LinkIcon className="h-3 w-3" /></a>
+                                                </div>
                                                 <input
-                                                    type="date"
-                                                    value={expiryDate}
-                                                    onChange={e => setExpiryDate(e.target.value)}
-                                                    className="w-full border p-2 rounded bg-white"
+                                                    type="text"
+                                                    value={paypalClientId}
+                                                    onChange={e => setPaypalClientId(e.target.value.trim())}
+                                                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                                 />
-                                                <p className="text-[10px] text-gray-400 mt-1">{t('expiryHint')}</p>
                                             </div>
-                                        )}
-                                    </div>
-                                    {isEditing && (
-                                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-                                            <h4 className="font-bold text-green-800 mb-2">{t('quickSubscription')}</h4>
-                                            <div className="flex gap-2 mb-3">
-                                                <button type="button" onClick={() => handleExtendSubscription(30)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+30 {t('days') || 'Days'}</button>
-                                                <button type="button" onClick={() => handleExtendSubscription(120)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+120 {t('days') || 'Days'}</button>
-                                                <button type="button" onClick={() => handleExtendSubscription(365)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">+365 {t('days') || 'Days'}</button>
+
+                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
+                                                <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-4">{t('smtpSettings')}</h4>
+                                                <div className="space-y-3">
+                                                    <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value.trim())} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder={t('smtpHostLabel')} />
+                                                    <input type="text" value={smtpPort} onChange={e => setSmtpPort(e.target.value.trim())} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder={t('smtpPortLabel')} />
+                                                    <input type="text" value={smtpUser} onChange={e => setSmtpUser(e.target.value.trim())} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder={t('smtpUserLabel')} />
+                                                    <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value.trim())} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder={t('smtpPassLabel')} />
+                                                </div>
                                             </div>
-                                            <div className="border-t border-green-200 pt-3">
-                                                <button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 font-bold flex items-center gap-1 disabled:opacity-50 hover:underline">
-                                                    <EnvelopeIcon className="h-3 w-3" /> {sendingEmail ? t('sending') : t('sendAccountEmail')}
-                                                </button>
+
+                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
+                                                <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-4">{t('copyrightManagement')}</h4>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="text-xs text-gray-400 mb-1 block">{t('publishUnit')}</label>
+                                                        <input type="text" value={publishUnit} onChange={e => setPublishUnit(e.target.value)} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder="Mazylab Studio" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-gray-400 mb-1 block">{t('publishVersion')}</label>
+                                                        <input type="text" value={publishVersion} onChange={e => setPublishVersion(e.target.value)} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder="v.1.120" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-gray-400 mb-1 block">{t('contactEmail')}</label>
+                                                        <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" placeholder="contact@example.com" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
+                                                <label className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5 block">{t('adminNotificationEmailLabel')}</label>
+                                                <input type="email" value={systemEmail} onChange={e => setSystemEmail(e.target.value.trim())} className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm" />
+                                            </div>
+
+                                            <div className="pt-4 flex flex-col gap-3">
+                                                <button onClick={handleSaveConfig} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-3 shadow-lg shadow-blue-500/20 transition-all active:scale-95">{t('saveConfiguration')}</button>
+                                                <button onClick={handleSimulatePaymentForAdmin} className="w-full bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl py-2.5 transition-all">{t('simulatePayment')}</button>
+                                                {configSuccess && <p className="text-sm text-green-600 font-bold text-center animate-bounce">{configSuccess}</p>}
                                             </div>
                                         </div>
-                                    )}
-                                    <div className="flex justify-end gap-2 pt-2 border-t mt-4">
-                                        <button type="button" onClick={resetForm} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">{t('cancel')}</button>
-                                        <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold shadow-sm">{t('saveChanges')}</button>
                                     </div>
-                                </form>
+
+                                    <div className="space-y-6">
+                                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-2xl border border-blue-100 dark:border-blue-800 shadow-sm">
+                                            <h3 className="text-lg font-bold text-blue-800 dark:text-blue-300 mb-4 flex items-center gap-2">
+                                                <ArrowDownTrayIcon className="h-5 w-5" />
+                                                {t('dataAndBackup')}
+                                            </h3>
+
+                                            <div className="space-y-4">
+                                                <div className="pb-4 border-b border-blue-200 dark:border-blue-800/50 flex flex-col gap-3">
+                                                    <button onClick={handleSystemBackup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+                                                        <ArrowDownTrayIcon className="h-5 w-5" /> {t('backupSystem')}
+                                                    </button>
+                                                    <input type="file" accept=".json" onChange={handleSystemRestore} ref={restoreInputRef} className="hidden" />
+                                                    <button onClick={() => restoreInputRef.current?.click()} className="w-full bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-all">
+                                                        <ArrowUpTrayIcon className="h-5 w-5" /> {t('restoreSystem')}
+                                                    </button>
+                                                </div>
+
+                                                <div className="flex flex-col gap-3 mt-4">
+                                                    <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
+                                                    <button onClick={() => fileInputRef.current?.click()} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95">
+                                                        <ArrowDownTrayIcon className="h-5 w-5 transform rotate-180" /> {t('importCsv')}
+                                                    </button>
+                                                    <button onClick={handleClearData} className="w-full bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold rounded-xl py-2.5 transition-all">
+                                                        {t('clearImportedData')}
+                                                    </button>
+                                                </div>
+
+                                                {importStatus && <div className="mt-4 p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-800 dark:text-blue-300 text-sm text-center font-bold border border-blue-200 dark:border-blue-800 animate-pulse">{importStatus}</div>}
+                                            </div>
+                                        </div>
+
+                                        <div className="p-5 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-400 leading-relaxed shadow-sm">
+                                            <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-wider">
+                                                <ExclamationTriangleIcon className="h-4 w-4" />
+                                                Admin Note
+                                            </div>
+                                            {t('dataManagementHint')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="animate-fade-in">
+                                <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-8">
+                                    <div className="flex items-center gap-4">
+                                        <h3 className="text-2xl font-black text-gray-800 dark:text-white">{t('userList')}</h3>
+                                        <button
+                                            onClick={handleRefreshUsers}
+                                            disabled={isRefreshing}
+                                            className="p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-all active:scale-90"
+                                            title="重新整理列表"
+                                        >
+                                            <ArrowPathIcon className={`h-5 w-5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={handleExportCsv} className="flex-1 lg:flex-none border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-6 py-2.5 rounded-xl text-sm font-black hover:bg-green-100 dark:hover:bg-green-900/40 transition-all flex items-center justify-center gap-2">
+                                            <ArrowDownTrayIcon className="h-4 w-4" />
+                                            {t('exportCsv')}
+                                        </button>
+                                        <button onClick={handleAddNew} className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-black shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                            <span className="text-xl leading-none">+</span>
+                                            {t('addUser')}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xl mb-8 bg-white dark:bg-gray-900">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+                                                    <th className="p-5 text-xs font-black text-gray-500 uppercase tracking-widest">Email</th>
+                                                    <th className="p-5 text-xs font-black text-gray-500 uppercase tracking-widest">{t('nameLabel')}</th>
+                                                    <th className="p-5 text-xs font-black text-gray-500 uppercase tracking-widest">{t('roleLabel')}</th>
+                                                    <th className="p-5 text-xs font-black text-gray-500 uppercase tracking-widest">{t('expiryLabel')}</th>
+                                                    <th className="p-5 text-xs font-black text-gray-500 uppercase tracking-widest text-right">{t('actionLabel')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                                {users.map(u => (
+                                                    <tr key={u.email} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                                                        <td className="p-5 text-sm font-medium text-gray-800 dark:text-gray-200">{u.email}</td>
+                                                        <td className="p-5 text-sm text-gray-600 dark:text-gray-400">{u.name}</td>
+                                                        <td className="p-5">
+                                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.role === '管理員' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                                                u.role === '付費用戶' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                                    'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                                }`}>
+                                                                {t(u.role)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-5 text-sm text-gray-600 dark:text-gray-400">{u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString() : '-'}</td>
+                                                        <td className="p-5 text-right">
+                                                            <div className="flex justify-end items-center gap-3">
+                                                                <button onClick={() => handleEdit(u)} className="text-blue-600 hover:text-blue-700 font-bold p-1 rounded-lg hover:bg-blue-50 transition-all">{t('edit')}</button>
+                                                                {u.email === currentUser?.email ? (
+                                                                    <span className="text-gray-300 dark:text-gray-600 cursor-not-allowed text-sm font-bold">{t('delete')}</span>
+                                                                ) : (
+                                                                    <button onClick={() => initiateDelete(u.email)} className="text-red-500 hover:text-red-600 font-bold p-1 rounded-lg hover:bg-red-50 transition-all">{t('delete')}</button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {(isEditing || isAdding) && (
+                                    <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-inner">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="p-3 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl">
+                                                <Cog6ToothIcon className="h-6 w-6" />
+                                            </div>
+                                            <h3 className="text-xl font-black text-gray-800 dark:text-white">{isAdding ? t('addUserTitle') : t('editUserTitle')}</h3>
+                                        </div>
+
+                                        <form onSubmit={handleSubmit} className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">Email</label>
+                                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!!isEditing} placeholder="Email" className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all disabled:opacity-50" required />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">{t('password')}</label>
+                                                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isEditing ? t('passwordPlaceholderEdit') : t('passwordPlaceholderAdd')} className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">{t('name')}</label>
+                                                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('name')} className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" required />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">{t('phone')}</label>
+                                                    <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('phone')} className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" required />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">{t('role')}</label>
+                                                    <select value={role} onChange={e => handleRoleChange(e.target.value as UserRole)} className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none cursor-pointer">
+                                                        {roles.map(r => <option key={r} value={r}>{t(r)}</option>)}
+                                                    </select>
+                                                </div>
+                                                {isEditing && (
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">{t('expiryLabel')}</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="date"
+                                                                value={expiryDate}
+                                                                onChange={e => setExpiryDate(e.target.value)}
+                                                                className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none"
+                                                            />
+                                                        </div>
+                                                        <p className="text-[10px] text-gray-400 mt-1 ml-1">{t('expiryHint')}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {isEditing && (
+                                                <div className="mt-8 p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 border border-green-100 dark:border-green-800/50 rounded-3xl">
+                                                    <h4 className="text-sm font-black text-green-800 dark:text-green-400 mb-4 flex items-center gap-2">
+                                                        <SparklesIcon className="h-4 w-4" />
+                                                        {t('quickSubscription')}
+                                                    </h4>
+                                                    <div className="flex flex-wrap gap-3 mb-6">
+                                                        <button type="button" onClick={() => handleExtendSubscription(30)} className="bg-white dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-green-600 hover:text-white transition-all shadow-sm active:scale-95">+30 {t('days') || 'Days'}</button>
+                                                        <button type="button" onClick={() => handleExtendSubscription(120)} className="bg-white dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-green-600 hover:text-white transition-all shadow-sm active:scale-95">+120 {t('days') || 'Days'}</button>
+                                                        <button type="button" onClick={() => handleExtendSubscription(365)} className="bg-white dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-green-600 hover:text-white transition-all shadow-sm active:scale-95">+365 {t('days') || 'Days'}</button>
+                                                    </div>
+                                                    <div className="border-t border-green-100 dark:border-green-800/50 pt-4">
+                                                        <button type="button" onClick={handleSendRealEmail} disabled={sendingEmail} className="text-xs text-green-700 dark:text-green-400 font-black flex items-center gap-2 disabled:opacity-50 hover:bg-green-600 hover:text-white px-4 py-2 rounded-xl transition-all w-fit">
+                                                            <EnvelopeIcon className="h-4 w-4" />
+                                                            {sendingEmail ? t('sending') : t('sendAccountEmail')}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+                                                <button type="button" onClick={resetForm} className="px-8 py-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 font-bold transition-all">{t('cancel')}</button>
+                                                <button type="submit" className="px-10 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black shadow-xl shadow-blue-500/20 transition-all active:scale-95">{t('saveChanges')}</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                )}
+
+                                {(success || error) && (
+                                    <div className={`mt-8 p-5 rounded-2xl font-bold flex items-center gap-3 animate-slide-up ${success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                                        {success ? <CheckCircleIcon className="h-5 w-5" /> : <ExclamationTriangleIcon className="h-5 w-5" />}
+                                        {success || error}
+                                    </div>
+                                )}
                             </div>
                         )}
-                        {(success || error) && <div className={`mt-4 p-4 rounded ${success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{success || error}</div>}
                     </div>
                 </div>
             </div>

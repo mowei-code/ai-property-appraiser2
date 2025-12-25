@@ -9,6 +9,8 @@ import zhCN from '../locales/zh-CN.json';
 import en from '../locales/en.json';
 import ja from '../locales/ja.json';
 
+// Force re-import of locales
+
 export interface Settings {
   apiKey: string;
   theme: 'light' | 'dark' | 'system';
@@ -80,7 +82,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [isSettingsModalOpen, setIsSettingsModalOpenState] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<'preferences' | 'upgrade'>('preferences');
-  const [translations, setTranslations] = useState(defaultTranslations);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Wrapper to allow setting tab
@@ -275,7 +276,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const t = useCallback((key: string, replacements?: Record<string, string>): string => {
-    const langTranslations = translations[settings.language] || {};
+    // Use defaultTranslations directly to ensure HMR updates are picked up immediately
+    const langTranslations = defaultTranslations[settings.language] || {};
     let translation = langTranslations[key] || key;
     if (replacements) {
       Object.keys(replacements).forEach(rKey => {
@@ -284,7 +286,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
     }
     return translation;
-  }, [settings.language, translations]);
+  }, [settings.language]);
 
   return (
     <SettingsContext.Provider value={{ settings, isSettingsModalOpen, settingsModalTab, setSettingsModalOpen, saveSettings, getApiKey, t }}>

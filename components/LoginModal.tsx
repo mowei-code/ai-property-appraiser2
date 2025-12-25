@@ -39,6 +39,7 @@ export const LoginModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const { resetPassword } = useContext(AuthContext);
 
   const handleForgotPasswordSubmit = async () => {
@@ -122,12 +123,18 @@ export const LoginModal: React.FC = () => {
         }
 
         const result = await register({ email, password, name, phone });
-        if (!result.success) {
+        if (result.success) {
+          setShowSuccessOverlay(true);
+          notifyRegistration(email, name, phone);
+
+          // Show buffer for 2 seconds before showing the "Close/Done" view
+          setTimeout(() => {
+            setShowSuccessOverlay(false);
+            setRegistrationSuccess(true);
+          }, 2000);
+        } else {
           setError(t(result.messageKey) + (result.message ? `: ${result.message}` : ''));
           setGeneratedCaptcha(Math.floor(100000 + Math.random() * 900000).toString());
-        } else {
-          setRegistrationSuccess(true);
-          notifyRegistration(email, name, phone);
         }
       } else {
         const loginResult = await login(email, password);
@@ -243,6 +250,13 @@ export const LoginModal: React.FC = () => {
                 </div>
               </form>
             )
+          )}
+          {showSuccessOverlay && (
+            <LoadingOverlay
+              type="success"
+              message={t('registrationSuccess')}
+              isFullScreen={true}
+            />
           )}
         </div >
 

@@ -469,5 +469,15 @@
   "configureInAdmin": "請至管理後台設定",
   "apiKeyDescription": "您的 API 金鑰將安全地儲存在您的瀏覽器中，不會被傳送到我們的伺服器。",
   "backToPlans": "選擇其他方案",
-  "aiAnalysisInProgress": "AI 正在進行智慧分析，請稍候片刻"
+  "aiAnalysisInProgress": "AI 正在進行智慧分析，請稍候片刻",
+  "welcomeEmailSubject": "[AI房產估價師] 歡迎使用！帳號已開通",
+  "welcomeEmailBody": "親愛的 {{name}} 您好，\n\n管理員已為您建立帳號。\n您的角色：{{role}}\n訂閱到期日：{{expiry}}\n\n祝您使用愉快！\n\n--\n{{appTitle}} (系統自動發出)",
+  "updateEmailSubject": "[AI房產估價師] 帳號狀態更新通知",
+  "updateEmailBody": "親愛的 {{name}} 您好，\n\n您的帳號狀態已更新為：{{role}}\n訂閱到期日：{{expiry}}\n\n感謝您的持續支持。\n\n--\n{{appTitle}} (系統自動發出)",
+  "deleteEmailSubject": "[AI房產估價師] 帳號註銷通知",
+  "deleteEmailBody": "親愛的 {{name}} 您好，\n\n您的帳號已被管理員移除。如果您有任何疑問，請聯繫系統管理員。\n\n--\n{{appTitle}} (系統自動發出)",
+  "autoEmailSent": "系統已自動發送通知信至 {{email}}",
+  "autoEmailFailed": "自動發送通知信失敗: {{error}}",
+  "paymentSuccessEmailSubject": "[AI房產估價師] 訂閱成功通知",
+  "paymentSuccessEmailBody": "親愛的 {{name}} 您好，\n\n感謝您的訂閱！\n您的付款已確認成功。\n\n訂閱方案：{{plan}}\n付款金額：{{amount}}\n訂閱到期日：{{expiry}}\n\n祝您使用愉快！\n\n--\n{{appTitle}} (系統自動發出)"
 }

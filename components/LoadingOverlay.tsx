@@ -7,14 +7,39 @@ interface LoadingOverlayProps {
   message?: string;
   className?: string;
   isFullScreen?: boolean;
+  type?: 'loading' | 'success';
 }
 
-export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ message, className = '', isFullScreen = true }) => {
+const CheckCircleIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+  </svg>
+);
+
+export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ message, className = '', isFullScreen = true, type = 'loading' }) => {
   const { t } = useTranslation();
 
   const containerClasses = isFullScreen
-    ? `fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 bg-transparent cursor-wait text-center animate-fade-in ${className}`
+    ? `fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 bg-black/40 backdrop-blur-sm cursor-wait text-center animate-fade-in ${className}`
     : `flex flex-col items-center justify-center p-8 bg-transparent min-h-[300px] text-center animate-fade-in ${className}`;
+
+  if (type === 'success') {
+    return (
+      <div className={containerClasses}>
+        <div className="bg-white dark:bg-slate-800 p-10 rounded-3xl shadow-2xl border border-green-200 dark:border-green-900 flex flex-col items-center gap-6 animate-fade-in-up">
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+            <CheckCircleIcon className="h-12 w-12" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white">
+              {message || t('success')}
+            </h3>
+            <div className="w-12 h-1 bg-green-500 mx-auto rounded-full"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={containerClasses}>

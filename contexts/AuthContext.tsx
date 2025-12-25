@@ -256,11 +256,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (data.user) {
                 try {
                     await fetchProfile(data.user);
+                    // Prevent auto-login: Sign out immediately so user can see success message and then login manually.
+                    // This matches the user's request for a "Registration successful, go to login" flow.
+                    await supabase.auth.signOut();
                 } catch (e) {
-                    console.warn("Initial profile creation warning:", e);
+                    console.warn("Initial profile creation/signout warning:", e);
                 }
 
-                setLoginModalOpen(false);
+                // Don't close modal yet, let LoginModal show registration success state
                 return { success: true, messageKey: 'registrationSuccess' };
             }
 

@@ -467,5 +467,15 @@
   "configureInAdmin": "请至管理后台设定",
   "apiKeyDescription": "您的 API 金钥将安全地储存在您的浏览器中，不会被传送到我们的伺服器。",
   "backToPlans": "选择其他方案",
-  "aiAnalysisInProgress": "AI 正在进行智慧分析，请稍候片刻"
+  "aiAnalysisInProgress": "AI 正在进行智慧分析，请稍候片刻",
+  "welcomeEmailSubject": "[AI房产估价师] 欢迎使用！账号已开通",
+  "welcomeEmailBody": "亲爱的 {{name}} 您好，\n\n管理员已为您创建账号。\n您的角色：{{role}}\n订阅到期日：{{expiry}}\n\n祝您使用愉快！\n\n--\n{{appTitle}} (系统自动发出)",
+  "updateEmailSubject": "[AI房产估价师] 账号状态更新通知",
+  "updateEmailBody": "亲爱的 {{name}} 您好，\n\n您的账号状态已更新为：{{role}}\n订阅到期日：{{expiry}}\n\n感谢您的持续支持。\n\n--\n{{appTitle}} (系统自动发出)",
+  "deleteEmailSubject": "[AI房产估价师] 账号注销通知",
+  "deleteEmailBody": "亲爱的 {{name}} 您好，\n\n您的账号已被管理员移除。如果您有任何疑问，请联系系统管理员。\n\n--\n{{appTitle}} (系统自动发出)",
+  "autoEmailSent": "系统已自动发送通知信至 {{email}}",
+  "autoEmailFailed": "自动发送通知信失败: {{error}}",
+  "paymentSuccessEmailSubject": "[AI房产估价师] 订阅成功通知",
+  "paymentSuccessEmailBody": "亲爱的 {{name}} 您好，\n\n感谢您的订阅！\n您的付款已确认成功。\n\n订阅方案：{{plan}}\n付款金额：{{amount}}\n订阅到期日：{{expiry}}\n\n祝您使用愉快！\n\n--\n{{appTitle}} (系统自动发出)"
 }

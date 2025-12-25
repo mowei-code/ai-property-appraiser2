@@ -463,5 +463,15 @@
   "configureInAdmin": "Please configure in Admin Panel",
   "apiKeyDescription": "Your API key is stored securely in your browser and is never sent to our servers.",
   "backToPlans": "Choose another plan",
-  "aiAnalysisInProgress": "AI is performing smart analysis, please wait a moment..."
+  "aiAnalysisInProgress": "AI is performing smart analysis, please wait a moment...",
+  "welcomeEmailSubject": "[AI Appraiser] Welcome! Account Verified",
+  "welcomeEmailBody": "Dear {{name}},\n\nYour account has been created by the administrator.\nRole: {{role}}\nSubscription Expiry: {{expiry}}\n\nEnjoy using our service!\n\n--\n{{appTitle}} (Automated System Message)",
+  "updateEmailSubject": "[AI Appraiser] Account Status Update",
+  "updateEmailBody": "Dear {{name}},\n\nYour account status has been updated to: {{role}}\nSubscription Expiry: {{expiry}}\n\nThank you for your continued support.\n\n--\n{{appTitle}} (Automated System Message)",
+  "deleteEmailSubject": "[AI Appraiser] Account Deletion Notice",
+  "deleteEmailBody": "Dear {{name}},\n\nYour account has been removed by the administrator. If you have any questions, please contact the system administrator.\n\n--\n{{appTitle}} (Automated System Message)",
+  "autoEmailSent": "Automated notification sent to {{email}}",
+  "autoEmailFailed": "Failed to send automated notification: {{error}}",
+  "paymentSuccessEmailSubject": "[AI Appraiser] Subscription Successful",
+  "paymentSuccessEmailBody": "Dear {{name}},\n\nThank you for your subscription!\nYour payment has been successfully confirmed.\n\nPlan: {{plan}}\nAmount: {{amount}}\nExpiry Date: {{expiry}}\n\nEnjoy using our service!\n\n--\n{{appTitle}} (Automated System Message)"
 }

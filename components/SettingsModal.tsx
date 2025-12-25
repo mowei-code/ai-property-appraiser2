@@ -3,11 +3,13 @@ import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@pa
 import { SettingsContext, Settings } from '../contexts/SettingsContext';
 import { AuthContext } from '../contexts/AuthContext';
 import { XMarkIcon } from './icons/XMarkIcon';
+import { LoadingOverlay } from './LoadingOverlay';
 import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { sendEmail } from '../services/emailService';
 
 // --- Error Boundary for PayPal ---
 interface ErrorBoundaryProps {
@@ -146,6 +148,7 @@ export const SettingsModal: React.FC = () => {
     const [selectedPlan, setSelectedPlan] = useState<string>('monthly');
     const [isPaymentStep, setIsPaymentStep] = useState(false);
     const [paypalError, setPaypalError] = useState('');
+    const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
     useEffect(() => {
         setLocalSettings(settings); // Sync local settings when modal opens
@@ -246,8 +249,42 @@ export const SettingsModal: React.FC = () => {
                 });
 
                 if (result.success) {
-                    setUpgradeSuccess(t('upgradeSuccess'));
+                    setShowSuccessOverlay(true);
                     setPaypalError('');
+
+                    // Trigger Automated Payment Success Email
+                    // ... (Email logic stays same)
+                    if (settings.smtpHost && settings.smtpUser && settings.smtpPass) {
+                        try {
+                            const subject = t('paymentSuccessEmailSubject');
+                            const appTitle = t('appTitle');
+                            const text = t('paymentSuccessEmailBody')
+                                .replace('{{name}}', currentUser.name || currentUser.email)
+                                .replace('{{plan}}', currentPlan?.label || 'Premium Plan')
+                                .replace('{{amount}}', currentPlan?.priceDisplay || 'Paid')
+                                .replace('{{expiry}}', newExpiryDate.toLocaleDateString())
+                                .replace('{{appTitle}}', appTitle);
+
+                            await sendEmail({
+                                smtpHost: settings.smtpHost,
+                                smtpPort: settings.smtpPort,
+                                smtpUser: settings.smtpUser,
+                                smtpPass: settings.smtpPass,
+                                to: currentUser.email,
+                                subject,
+                                text
+                            });
+                        } catch (emailErr) {
+                            console.error("Failed to send payment success email:", emailErr);
+                        }
+                    }
+
+                    // Buffer for 2 seconds
+                    setTimeout(() => {
+                        setShowSuccessOverlay(false);
+                        setUpgradeSuccess(t('upgradeSuccess'));
+                    }, 2000);
+
                 } else {
                     setPaypalError("Upgrade failed locally: " + t(result.messageKey));
                 }
@@ -288,8 +325,8 @@ export const SettingsModal: React.FC = () => {
                     <button
                         onClick={() => setActiveTab('preferences')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'preferences'
-                                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                             }`}
                     >
                         {t('preferences')}
@@ -298,8 +335,8 @@ export const SettingsModal: React.FC = () => {
                         <button
                             onClick={() => setActiveTab('upgrade')}
                             className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === 'upgrade'
-                                    ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-600 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-900/10'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10'
+                                ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-600 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-900/10'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10'
                                 }`}
                         >
                             <SparklesIcon className={`h-4 w-4 ${activeTab === 'upgrade' ? 'animate-pulse' : ''}`} />
@@ -583,6 +620,14 @@ export const SettingsModal: React.FC = () => {
                         )}
                     </form>
                 </main>
+
+                {showSuccessOverlay && (
+                    <LoadingOverlay
+                        type="success"
+                        message={t('upgradeSuccess')}
+                        isFullScreen={true}
+                    />
+                )}
             </div>
         </div>
     );

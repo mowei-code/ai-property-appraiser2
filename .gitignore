@@ -15,6 +15,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo
@@ -34,3 +35,4 @@ backup/
 # OS files
 Thumbs.db
 Desktop.ini
+mobile_simulator/build/

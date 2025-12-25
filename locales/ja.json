@@ -449,5 +449,15 @@
   "configureInAdmin": "管理パネルで設定してください",
   "apiKeyDescription": "APIキーはブラウザに安全に保存され、サーバーに送信されることはありません。",
   "backToPlans": "他のプランを選択",
-  "aiAnalysisInProgress": "AIがスマート分析を実行中です、少々お待ちください..."
+  "aiAnalysisInProgress": "AIがスマート分析を実行中です、少々お待ちください...",
+  "welcomeEmailSubject": "[AI不動産査定] ようこそ！アカウントが開設されました",
+  "welcomeEmailBody": "{{name}} 様\n\n管理者があなたのアカウントを作成しました。\nロール：{{role}}\n有効期限：{{expiry}}\n\nご利用ありがとうございます！\n\n--\n{{appTitle}} (自動送信メール)",
+  "updateEmailSubject": "[AI不動産査定] アカウントステータス更新通知",
+  "updateEmailBody": "{{name}} 様\n\nアカウントステータスが更新されました：{{role}}\n有効期限：{{expiry}}\n\n今後ともよろしくお願いいたします。\n\n--\n{{appTitle}} (自動送信メール)",
+  "deleteEmailSubject": "[AI不動産査定] アカウント削除通知",
+  "deleteEmailBody": "{{name}} 様\n\nあなたのアカウントは管理者によって削除されました。ご不明な点がございましたら、システム管理者にお問い合わせください。\n\n--\n{{appTitle}} (自動送信メール)",
+  "autoEmailSent": "通知メールを {{email}} に自動送信しました",
+  "autoEmailFailed": "自動送信に失敗しました: {{error}}",
+  "paymentSuccessEmailSubject": "[AI不動産査定] 購読完了通知",
+  "paymentSuccessEmailBody": "{{name}} 様\n\n購読ありがとうございます！\nお支払いが確認されました。\n\nプラン：{{plan}}\n金額：{{amount}}\n有効期限：{{expiry}}\n\nご利用ありがとうございます！\n\n--\n{{appTitle}} (自動送信メール)"
 }

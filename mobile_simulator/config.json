@@ -1,0 +1,15 @@
+{
+    "last_url": "http://localhost:5173",
+    "last_device_index": 2,
+    "last_frame_color": "#d4af37",
+    "last_frame_border": "#b8860b",
+    "last_scale": 1.0,
+    "custom_devices": [
+        {
+            "name": "iPad pro 11 M4",
+            "width": 780,
+            "height": 640,
+            "radius": 50
+        }
+    ]
+}
